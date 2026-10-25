@@ -1,0 +1,26 @@
+name: AstroWatch Release Workflow
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "AstroWatch ${{ github.ref_name }} — Orbital Visualization Upgrade"
+          generate_release_notes: true
+          draft: false
+          prerelease: false
