@@ -1,3 +1,8 @@
+import {
+    calculateHeliocentricPosition,
+    createOrbitPoints
+} from "./orbit-math.js";
+
 import * as THREE from "three";
 
 import { OrbitControls } from
@@ -37,6 +42,14 @@ const state = {
 const numberFormatter = new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 2
 });
+
+const asteroidMeshes = [];
+
+const orbitLines = [];
+
+const orbitPositions = new Map();
+
+const orbitEpochs = new Map();
 
 function formatNumber(value, digits = 2) {
     if (value === null || value === undefined || !Number.isFinite(Number(value))) {
@@ -188,6 +201,9 @@ async function loadAsteroids() {
 
         state.objects = Array.isArray(data.objects)
             ? data.objects
+            orbitLines: new Map(),
+orbitPositions: new Map(),
+orbitEpochs: new Map(),
             : [];
 
         state.selected = null;
@@ -265,6 +281,7 @@ function applyFilters() {
 
     renderTable();
     renderAsteroidMarkers();
+    
 }
 
 function addCell(row, text) {
@@ -317,6 +334,7 @@ function renderTable() {
         objectButton.addEventListener("click", () => {
             selectAsteroid(neo);
         });
+        loadRealOrbit(neo);
 
         objectCell.appendChild(objectButton);
         row.appendChild(objectCell);
@@ -371,6 +389,7 @@ function renderTable() {
             if (event.target.closest("button")) return;
             selectAsteroid(neo);
         });
+        loadRealOrbit(neo);
 
         fragment.appendChild(row);
     }
@@ -784,20 +803,83 @@ function resizeThreeScene() {
 }
 
 function clearAsteroidMeshes() {
-    for (const mesh of state.asteroidMeshes.values()) {
-        state.scene.remove(mesh);
+    // Remove asteroid markers from the Three.js scene
+    if (asteroidMeshes && asteroidMeshes.length > 0) {
+        asteroidMeshes.forEach((mesh) => {
+            scene.remove(mesh);
 
-        mesh.geometry.dispose();
-        mesh.material.dispose();
+            // Dispose of geometry and materials to prevent memory leaks
+            if (mesh.geometry) {
+                mesh.geometry.dispose();
+            }
+
+            if (mesh.material) {
+                if (Array.isArray(mesh.material)) {
+                    mesh.material.forEach((material) => material.dispose());
+                } else {
+                    mesh.material.dispose();
+                }
+            }
+        });
+
+        asteroidMeshes.length = 0;
     }
 
-    state.asteroidMeshes.clear();
-}
+    // Remove orbital trajectory lines
+    if (orbitLines && orbitLines.length > 0) {
+        orbitLines.forEach((line) => {
+            scene.remove(line);
+
+            if (line.geometry) {
+                line.geometry.dispose();
+            }
+
+            if (line.material) {
+                if (Array.isArray(line.material)) {
+                    line.material.forEach((material) => material.dispose());
+                } else {
+                    line.material.dispose();
+                }
+            }
+        });
+
+        orbitLines.length = 0;
+    }
+
+    // Clear cached orbital positions and epochs
+    if (orbitPositions) {
+        orbitPositions.clear();
+    }
+
+    if (orbitEpochs) {
+        orbitEpochs.clear();
+    }
+            }
 
 function renderAsteroidMarkers() {
     if (!state.scene) return;
 
     clearAsteroidMeshes();
+
+    mesh.position.set(
+    Math.cos(angle) * radius,
+    Math.sin(index * 0.4) * 5,
+    Math.sin(angle) * radius
+);
+
+    const knownPosition = state.orbitPositions.get(neo.id);
+
+if (knownPosition) {
+    mesh.position.copy(knownPosition);
+} else {
+    // Illustrative placement until actual orbital elements are available.
+    mesh.position.set(
+        Math.cos(angle) * radius,
+        Math.sin(index * 0.4) * 5,
+        Math.sin(angle) * radius
+    );
+}
+    
 
     const objects = state.filteredObjects.slice(0, 150);
 
@@ -809,6 +891,7 @@ function renderAsteroidMarkers() {
             neo.is_potentially_hazardous ? 0.55 : 0.4,
             neo.is_potentially_hazardous ? 0xff7f9d : 0x65e6f0
         );
+        
 
         mesh.position.set(
             Math.cos(angle) * radius,
@@ -919,4 +1002,150 @@ async function main() {
     }
 }
 
+async function loadRealOrbit(neo) {
+    if (!neo || !neo.name) return;
+
+    setText("orbitStatus", "Retrieving orbital elements from JPL...");
+
+    try {
+        const data = await apiGet(
+            `/neo/orbit?search=${encodeURIComponent(neo.name)}`
+        );
+
+        const orbit = data.orbit;
+        const elements = orbit.elements || {};
+
+        function value(name) {
+            return elements[name]?.value ?? null;
+        }
+
+        const a = value("a");
+        const e = value("e");
+        const i = value("i");
+        const om = value("om");
+        const w = value("w");
+        const ma = value("ma");
+        const epoch = Number(orbit.epoch_jd_tdb);
+
+        setText(
+            "orbitA",
+            a === null ? "Not available" : `${a} AU`
+        );
+
+        setText(
+            "orbitE",
+            e === null ? "Not available" : String(e)
+        );
+
+        setText(
+            "orbitI",
+            i === null ? "Not available" : `${i}°`
+        );
+
+        setText(
+            "orbitEpoch",
+            Number.isFinite(epoch) ? `${epoch} JD (TDB)` : "Not available"
+        );
+
+        if (a !== null && a > 0 && e !== null && e >= 0 && e < 1) {
+            const periodDays = 365.256363004 * Math.sqrt(a ** 3);
+
+            setText(
+                "orbitPeriod",
+                `${formatNumber(periodDays / 365.256363004, 3)} years`
+            );
+        } else {
+            setText("orbitPeriod", "Not available");
+        }
+
+        const canCalculate =
+            [a, e, i, om, w, ma, epoch].every(
+                value => value !== null && Number.isFinite(Number(value))
+            );
+
+        if (!canCalculate) {
+            setText(
+                "orbitStatus",
+                "JPL returned orbital data, but one or more required elements are unavailable. No orbit was fabricated."
+            );
+
+            return;
+        }
+
+        const orbitalElements = {
+            a: Number(a),
+            e: Number(e),
+            i: Number(i),
+            om: Number(om),
+            w: Number(w),
+            ma: Number(ma),
+            epoch
+        };
+
+        drawJPLOrbit(neo.id, orbitalElements);
+
+        setText(
+            "orbitStatus",
+            `Orbital elements retrieved from JPL SBDB. ` +
+            `Orbit solution: ${orbit.orbit_id || "not specified"}. ` +
+            `The displayed path uses a simplified two-body model.`
+        );
+
+    } catch (error) {
+        setText(
+            "orbitStatus",
+            `Could not retrieve orbital elements: ${error.message}`
+        );
+    }
+    }
+
+function drawJPLOrbit(neoId, elements) {
+    if (!state.scene) return;
+
+    // Remove the previous JPL orbit for this object.
+    const existing = state.orbitLines.get(neoId);
+
+    if (existing) {
+        state.scene.remove(existing);
+        existing.geometry.dispose();
+        existing.material.dispose();
+        state.orbitLines.delete(neoId);
+    }
+
+    const points = createOrbitPoints(elements);
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+    const material = new THREE.LineBasicMaterial({
+        color: 0x65e6f0,
+        transparent: true,
+        opacity: 0.9
+    });
+
+    const orbitLine = new THREE.LineLoop(geometry, material);
+
+    state.scene.add(orbitLine);
+    state.orbitLines.set(neoId, orbitLine);
+
+    // Calculate the current approximate heliocentric position.
+    // Date conversion here is an approximation: UTC and TDB are not
+    // identical, so this should not be presented as a precision ephemeris.
+    const now = new Date();
+
+    const jdUtc =
+        now.getTime() / 86400000 + 2440587.5;
+
+    const position = calculateHeliocentricPosition(
+        elements,
+        jdUtc
+    );
+
+    state.orbitPositions.set(neoId, position);
+
+    const marker = state.asteroidMeshes.get(neoId);
+
+    if (marker) {
+        marker.position.copy(position);
+    }
+}
 main();
