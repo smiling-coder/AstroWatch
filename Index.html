@@ -187,3 +187,279 @@
                 <h2 id="selectedName">Select an asteroid</h2>
 
                 <p id="selectedDescription">
+                    Choose an object from the 3D scene or the object directory.
+                </p>
+
+                <div class="object-details">
+                    <div>
+                        <span>Diameter</span>
+                        <strong id="selectedDiameter">--</strong>
+                    </div>
+
+                    <div>
+                        <span>Relative speed</span>
+                        <strong id="selectedSpeed">--</strong>
+                    </div>
+
+                    <div>
+                        <span>Closest approach</span>
+                        <strong id="selectedDistance">--</strong>
+                    </div>
+
+                    <div>
+                        <span>Risk category</span>
+                        <strong id="selectedRisk">--</strong>
+                    </div>
+                </div>
+
+                <div class="risk-explanation">
+                    <h4>Risk interpretation</h4>
+                    <p id="riskExplanation">
+                        Object information will appear here.
+                    </p>
+                </div>
+
+            </aside>
+
+        </div>
+
+    </section>
+
+    <!-- ASTEROID DIRECTORY -->
+
+    <section class="section" id="objects">
+
+        <div class="section-heading">
+            <div>
+                <span class="section-tag">OBJECT DIRECTORY</span>
+                <h2>Asteroid Explorer</h2>
+                <p>Search and compare objects in the demonstration dataset.</p>
+            </div>
+        </div>
+
+        <div class="filters">
+
+            <input
+                type="search"
+                id="searchInput"
+                placeholder="Search asteroid name..."
+                aria-label="Search asteroid name"
+            >
+
+            <select id="riskFilter" aria-label="Filter by risk">
+                <option value="all">All categories</option>
+                <option value="HIGH">High demonstration risk</option>
+                <option value="MEDIUM">Medium demonstration risk</option>
+                <option value="LOW">Low demonstration risk</option>
+            </select>
+
+        </div>
+
+        <div class="table-wrapper">
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>OBJECT</th>
+                        <th>DIAMETER</th>
+                        <th>SPEED</th>
+                        <th>CLOSEST APPROACH</th>
+                        <th>DEMO CATEGORY</th>
+                        <th>ACTION</th>
+                    </tr>
+                </thead>
+
+                <tbody id="asteroidTable">
+                    <tr>
+                        <td colspan="6">Loading demonstration data...</td>
+                    </tr>
+                </tbody>
+            </table>
+
+        </div>
+
+    </section>
+
+    <!-- RISK ANALYSIS -->
+
+    <section class="section" id="analysis">
+
+        <div class="section-heading">
+            <div>
+                <span class="section-tag">SCIENTIFIC ANALYSIS</span>
+                <h2>Close-Approach Risk Lab</h2>
+                <p>Experiment with hypothetical distance and relative-speed values.</p>
+            </div>
+        </div>
+
+        <div class="analysis-grid">
+
+            <div class="analysis-card">
+
+                <h3>Test a hypothetical encounter</h3>
+
+                <p>
+                    Enter the minimum separation and relative speed for a
+                    hypothetical encounter. The tool will calculate an
+                    illustrative category.
+                </p>
+
+                <form id="riskForm">
+
+                    <label for="distanceInput">
+                        Minimum separation (km)
+                    </label>
+
+                    <input
+                        type="number"
+                        id="distanceInput"
+                        min="0"
+                        step="any"
+                        value="100000"
+                        required
+                    >
+
+                    <label for="speedInput">
+                        Relative speed (km/s)
+                    </label>
+
+                    <input
+                        type="number"
+                        id="speedInput"
+                        min="0"
+                        step="any"
+                        value="12"
+                        required
+                    >
+
+                    <button type="submit" class="primary-button full-button">
+                        Analyse Scenario
+                    </button>
+
+                </form>
+
+            </div>
+
+            <div class="analysis-card result-card">
+
+                <span class="section-tag">SCENARIO RESULT</span>
+
+                <div id="riskIndicator" class="risk-indicator">
+                    READY
+                </div>
+
+                <h3 id="resultTitle">Awaiting analysis</h3>
+
+                <p id="resultText">
+                    Run a hypothetical scenario to see its demonstration
+                    classification and explanation.
+                </p>
+
+                <div class="disclaimer">
+                    Important: This is not a scientifically validated
+                    impact-probability calculation.
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+    <!-- PROBLEM AND SOLUTION -->
+
+    <section class="section" id="solutions">
+
+        <div class="section-heading">
+            <div>
+                <span class="section-tag">MISSION OBJECTIVES</span>
+                <h2>Problems We Aim to Understand</h2>
+                <p>AstroWatch turns complex space-safety concepts into interactive learning experiences.</p>
+            </div>
+        </div>
+
+        <div class="solutions-grid">
+
+            <article class="solution-card">
+                <span>01</span>
+                <h3>Orbital Complexity</h3>
+                <p>
+                    Problem: Orbital paths can be difficult to understand.
+                </p>
+                <p>
+                    Approach: Visualise hypothetical trajectories around Earth
+                    in an interactive 3D scene.
+                </p>
+            </article>
+
+            <article class="solution-card">
+                <span>02</span>
+                <h3>Close Approaches</h3>
+                <p>
+                    Problem: Two objects may pass close to each other in space.
+                </p>
+                <p>
+                    Approach: Compare separation and relative speed using
+                    clearly labelled example scenarios.
+                </p>
+            </article>
+
+            <article class="solution-card">
+                <span>03</span>
+                <h3>Data Uncertainty</h3>
+                <p>
+                    Problem: Orbital measurements and predictions have
+                    uncertainties.
+                </p>
+                <p>
+                    Approach: Add uncertainty ranges and source timestamps
+                    when real orbital datasets are integrated.
+                </p>
+            </article>
+
+            <article class="solution-card">
+                <span>04</span>
+                <h3>Scientific Accessibility</h3>
+                <p>
+                    Problem: Astronomy datasets can be difficult for beginners
+                    to interpret.
+                </p>
+                <p>
+                    Approach: Present object properties, orbital concepts,
+                    and scientific explanations in one dashboard.
+                </p>
+            </article>
+
+        </div>
+
+    </section>
+
+    <!-- FOOTER -->
+
+    <footer>
+
+        <a href="#" class="logo">
+            <span class="logo-icon">✦</span>
+            ASTROWATCH
+        </a>
+
+        <p>
+            Explore space. Understand science. Protect the future of exploration.
+        </p>
+
+        <small>
+            Educational prototype • Simulated orbital data • Not for operational decisions
+        </small>
+
+        <p class="footer-credit">
+            Built with HTML, CSS, JavaScript, Three.js and Python Flask.
+        </p>
+
+    </footer>
+
+</main>
+
+<script src="script.js"></script>
+
+</body>
+    </html>
