@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AstroWatch | Near-Earth Object Observatory</title>
+
+    <meta name="description"
+          content="Explore near-Earth objects, asteroid trajectories, orbital data and close-approach risk through an interactive space observatory.">
+
+    <link rel="stylesheet" href="style.css">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+          rel="stylesheet">
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+</head>
+
+<body>
+
+<div class="background-stars"></div>
+
+<header class="navbar">
+    <a href="#" class="logo">
+        <span class="logo-icon">✦</span>
+        ASTROWATCH
+    </a>
+
+    <nav>
+        <a href="#overview">Overview</a>
+        <a href="#explorer">3D Explorer</a>
+        <a href="#objects">Asteroids</a>
+        <a href="#analysis">Risk Analysis</a>
+    </nav>
+
+    <button class="live-button">
+        <span class="live-dot"></span>
+        Observatory
+    </button>
+</header>
+
+<main>
+
+    <!-- HERO SECTION -->
+
+    <section class="hero" id="overview">
+
+        <div class="hero-content">
+
+            <div class="eyebrow">
+                <span>✧</span>
+                NEAR-EARTH OBJECT INTELLIGENCE
+            </div>
+
+            <h1>
+                Explore the Cosmos.<br>
+                <span>Understand the Unknown.</span>
+            </h1>
+
+            <p>
+                Discover near-Earth asteroids, explore orbital trajectories,
+                understand close approaches, and investigate the science
+                behind our changing cosmic neighbourhood.
+            </p>
+
+            <div class="hero-actions">
+                <a href="#explorer" class="primary-button">
+                    Explore 3D Space ↗
+                </a>
+
+                <a href="#analysis" class="secondary-button">
+                    View Risk Analysis
+                </a>
+            </div>
+
+            <div class="hero-note">
+                <span class="live-dot"></span>
+                Interactive educational space observatory
+            </div>
+
+        </div>
+
+        <div class="hero-visual">
+            <div class="planet-orbit orbit-one"></div>
+            <div class="planet-orbit orbit-two"></div>
+
+            <div class="hero-planet"></div>
+
+            <div class="floating-label label-one">
+                <span>☄</span>
+                ASTEROID TRACKING
+            </div>
+
+            <div class="floating-label label-two">
+                <span>◎</span>
+                ORBITAL ANALYSIS
+            </div>
+
+        </div>
+
+    </section>
+
+    <!-- STATISTICS -->
+
+    <section class="stats-grid">
+
+        <article class="stat-card">
+            <span class="stat-icon">☄</span>
+            <p>Objects in Dataset</p>
+            <h2 id="objectCount">--</h2>
+            <small>Simulated demonstration objects</small>
+        </article>
+
+        <article class="stat-card">
+            <span class="stat-icon">◎</span>
+            <p>Close Approaches</p>
+            <h2 id="approachCount">--</h2>
+            <small>Simulated proximity events</small>
+        </article>
+
+        <article class="stat-card">
+            <span class="stat-icon">◈</span>
+            <p>High-Risk Demonstrations</p>
+            <h2 id="riskCount">--</h2>
+            <small>Based on simplified thresholds</small>
+        </article>
+
+        <article class="stat-card">
+            <span class="stat-icon">◷</span>
+            <p>Data Mode</p>
+            <h2 class="mode-text">DEMO</h2>
+            <small>Not a live surveillance feed</small>
+        </article>
+
+    </section>
+
+    <!-- 3D EXPLORER -->
+
+    <section class="section" id="explorer">
+
+        <div class="section-heading">
+            <div>
+                <span class="section-tag">COSMIC VISUALISATION</span>
+                <h2>Interactive 3D Explorer</h2>
+                <p>Drag to rotate. Scroll to zoom. Select an object to inspect it.</p>
+            </div>
+
+            <div class="demo-badge">
+                ● SIMULATED ORBITS
+            </div>
+        </div>
+
+        <div class="explorer-layout">
+
+            <div class="space-panel">
+
+                <div class="canvas-toolbar">
+                    <span>EARTH ORBITAL VIEW</span>
+
+                    <div>
+                        <button id="resetView">Reset View</button>
+                        <button id="toggleRotation">Pause Rotation</button>
+                    </div>
+                </div>
+
+                <div id="spaceCanvas"></div>
+
+                <div class="legend">
+                    <span><i class="legend-earth"></i> Earth</span>
+                    <span><i class="legend-asteroid"></i> Asteroids</span>
+                    <span><i class="legend-orbit"></i> Orbital paths</span>
+                </div>
+
+            </div>
+
+            <aside class="object-panel">
+
+                <div class="panel-heading">
+                    <h3>Selected Object</h3>
+                    <span>OBJECT INFO</span>
+                </div>
+
+                <div class="object-symbol">☄</div>
+
+                <h2 id="selectedName">Select an asteroid</h2>
+
+                <p id="selectedDescription">
