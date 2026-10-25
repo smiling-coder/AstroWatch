@@ -28,6 +28,7 @@ from nasa_service import (
 
 from orbital_calculations import calculate_orbital_parameters
 
+from nasa_service import get_neo_orbit
 
 app = Flask(__name__)
 
@@ -158,6 +159,35 @@ def server_error(_error):
     return jsonify({
         "error": "An unexpected backend error occurred."
     }), 500
+
+@app.get("/api/neo/orbit")
+def neo_orbit():
+    """
+    Example:
+        GET /api/neo/orbit?search=99942%20Apophis
+    """
+
+    search_string = request.args.get("search", "").strip()
+
+    if not search_string:
+        return jsonify({
+            "error": "Provide an asteroid name or designation."
+        }), 400
+
+    try:
+        result = get_neo_orbit(search_string)
+        return jsonify(result)
+
+    except ValueError as exc:
+        return jsonify({
+            "error": str(exc)
+        }), 400
+
+    except NASAServiceError as exc:
+        return jsonify({
+            "error": str(exc),
+            "source": "JPL Small-Body Database"
+        }), 502
 
 
 if __name__ == "__main__":
