@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ASTROWATCH AI — Near-Earth Object Monitoring</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>:root{--bg:#04060f;--cy:#22d3ee;--vi:#8b5cf6;--am:#fbbf24;--rd:#ef4444;--tx:#e6f1ff;--mu:#8fa3bd;--gl:rgba(14,22,45,.55)}
+*{box-sizing:border-box;margin:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--tx);font:16px/1.6 Inter,sans-serif;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:-10%;z-index:-2;background:radial-gradient(60% 50% at 20% 20%,rgba(139,92,246,.2),transparent),radial-gradient(50% 50% at 80% 70%,rgba(34,211,238,.13),transparent);animation:neb 40s ease-in-out infinite alternate}
+body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(320px at var(--mx,50%) var(--my,50%),rgba(34,211,238,.07),transparent),radial-gradient(1px 1px at 20px 30px,#fff,transparent),radial-gradient(1px 1px at 120px 90px,#cde,transparent),radial-gradient(1.5px 1.5px at 80px 160px,#fff,transparent);background-size:auto,200px 200px,200px 200px,200px 200px}
+@keyframes neb{to{transform:scale(1.2) translate(3%,-3%)}}
+h1,h2,h3,.logo{font-family:'Space Grotesk',sans-serif}
+.mono,dl,.badge,table{font-family:'JetBrains Mono',monospace}
+h2{font-size:clamp(1.8rem,4vw,2.8rem);margin-bottom:.4rem}
+.muted{color:var(--mu)}.small{font-size:.82rem}.big{font-size:1.2rem;color:var(--cy);margin-top:1rem}
+.warn{color:var(--am)}
+a{color:var(--cy)}
+header{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;justify-content:space-between;align-items:center;padding:14px 5vw;background:linear-gradient(#04060fdd,transparent);backdrop-filter:blur(6px)}
+.logo{text-decoration:none;color:var(--tx);font-weight:700;letter-spacing:.18em}
+.logo span{color:var(--cy);margin-left:.4em}
+nav a{color:var(--mu);text-decoration:none;margin-left:1.4rem;font-size:.9rem;transition:color .2s}
+nav a:hover{color:var(--cy)}
+#burger{display:none;background:none;border:0;color:var(--tx);font-size:1.6rem}
+section{padding:110px 6vw 30px;max-width:1300px;margin:auto}
+#hero{max-width:none;height:100vh;padding:0;position:relative;overflow:hidden}
+#heroCanvas{position:absolute;inset:0;width:100%;height:100%;touch-action:pan-y;cursor:grab}
+.heroText{position:absolute;left:6vw;bottom:18vh;max-width:640px;pointer-events:none}
+.heroText .btns{pointer-events:auto}
+.tag{color:var(--cy);font-size:.78rem;letter-spacing:.12em;margin-bottom:.8rem}
+h1{font-size:clamp(2rem,5.2vw,4rem);line-height:1.05;margin-bottom:1rem;text-shadow:0 0 40px #000}
+.sub{color:#c3d3e8;margin-bottom:1.5rem;max-width:520px}
+.btns{display:flex;gap:.8rem;flex-wrap:wrap}
+.btn{display:inline-block;padding:.75rem 1.4rem;border-radius:99px;border:1px solid var(--cy);background:rgba(34,211,238,.12);color:var(--tx);text-decoration:none;font:500 .85rem 'Space Grotesk';letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:.25s}
+.btn:hover{background:var(--cy);color:#001018;box-shadow:0 0 24px rgba(34,211,238,.5)}
+.btn.ghost{border-color:var(--vi);background:rgba(139,92,246,.12)}
+.btn.ghost:hover{background:var(--vi);color:#fff;box-shadow:0 0 24px rgba(139,92,246,.5)}
+.btn.mini{padding:.4rem .9rem;font-size:.72rem}
+.note{position:absolute;right:5vw;top:76px;font-size:.7rem;color:var(--mu)}
+.scroll{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);font-size:.72rem;letter-spacing:.2em;color:var(--mu);animation:bob 2s infinite}
+@keyframes bob{50%{transform:translate(-50%,6px)}}
+.glass{background:var(--gl);border:1px solid rgba(120,160,255,.18);border-radius:18px;padding:1.2rem;backdrop-filter:blur(14px);box-shadow:0 10px 40px rgba(0,0,0,.4)}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin:1.2rem 0}
+.grid4 small{display:block;color:var(--mu)}
+.grid4 b{font:700 2.6rem 'Space Grotesk';color:var(--cy)}
+.badge{display:inline-block;padding:.1rem .7rem;border-radius:99px;font-size:.72rem;border:1px solid var(--mu)}
+.badge.live{color:#4ade80;border-color:#4ade80}.badge.demo{color:var(--am);border-color:var(--am)}.badge.none{color:var(--rd);border-color:var(--rd)}
+select,input:not([type=range]){background:rgba(10,16,34,.8);color:var(--tx);border:1px solid rgba(120,160,255,.3);border-radius:10px;padding:.55rem .8rem;font:inherit}
+input[type=range]{width:100%;accent-color:var(--cy);display:block}
+label{display:block;margin:.8rem 0}
+.lab{display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-top:1rem}
+.canvasBox{padding:0;height:520px;overflow:hidden}
+#orbitCanvas{width:100%;height:100%;touch-action:none;cursor:grab}
+.tools{display:flex;gap:.6rem;flex-wrap:wrap;margin:1rem 0}.tools input{flex:1;min-width:200px}
+.split{display:grid;grid-template-columns:1.3fr 1fr;gap:1rem}
+.list{max-height:460px;overflow:auto;margin-top:1rem}.split .list{margin-top:0}
+.row{display:flex;gap:1rem;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:.65rem .5rem;border-bottom:1px solid rgba(120,160,255,.12);cursor:pointer;transition:background .2s}
+.row:hover{background:rgba(34,211,238,.08)}
+.row span{font-size:.8rem;color:var(--mu)}
+.bar{flex:1;min-width:60px;height:4px;background:rgba(255,255,255,.1);border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--vi),var(--cy))}
+.mini:not(.btn){background:none;border:1px solid var(--vi);color:var(--tx);border-radius:99px;padding:.15rem .7rem;font-size:.72rem;cursor:pointer}
+.empty{text-align:center;color:var(--mu);padding:2rem}
+dl{display:grid;grid-template-columns:auto 1fr;gap:.3rem 1rem;font-size:.82rem;margin:.8rem 0}dt{color:var(--mu)}
+.scrollx{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.8rem;margin-bottom:1rem}td,th{padding:.45rem .7rem;border-bottom:1px solid rgba(120,160,255,.15);text-align:left}
+.chartBox{height:260px}
+.chat{margin-top:1rem}.chips{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.8rem}
+.chips button{background:rgba(139,92,246,.15);border:1px solid var(--vi);color:var(--tx);border-radius:99px;padding:.3rem .8rem;font-size:.78rem;cursor:pointer}
+#log{max-height:300px;overflow:auto;display:flex;flex-direction:column;gap:.6rem;margin-bottom:.8rem}
+.msg{padding:.6rem .9rem;border-radius:14px;max-width:85%;font-size:.92rem}
+.msg.u{align-self:flex-end;background:rgba(34,211,238,.18)}.msg.a{background:rgba(139,92,246,.2)}
+.ask{display:flex;gap:.5rem}.ask input{flex:1}
+footer{padding:60px 6vw 40px;text-align:center;color:var(--mu);font-size:.75rem}
+#loader{position:fixed;inset:0;z-index:99;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.4rem;color:var(--cy)}
+.rock{width:70px;height:62px;background:radial-gradient(circle at 30% 30%,#8b93a3,#2b3040);border-radius:42% 58% 51% 49%/55% 40% 60% 45%;animation:spin 2s linear infinite;box-shadow:0 0 30px rgba(34,211,238,.4)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:820px){
+ #burger{display:block}
+ nav{display:none;position:absolute;top:100%;left:0;right:0;background:#070c1af2;padding:1rem 5vw}
+ nav.open{display:block}nav a{display:block;margin:.6rem 0}
+ .lab,.split{grid-template-columns:1fr}.canvasBox{height:380px}
+ .heroText{bottom:14vh}.note{top:64px;left:5vw;right:auto}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}}
+
+#loader{animation:lo .5s 5s forwards}@keyframes lo{to{opacity:0;visibility:hidden}}
+
+.glass{border-radius:24px;background:linear-gradient(145deg,rgba(60,100,150,.28),rgba(8,14,32,.62))}
+.halo{position:absolute;left:50%;top:50%;width:min(78vh,86vw);aspect-ratio:1;transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.28);border-radius:50%;pointer-events:none;box-shadow:0 0 90px rgba(34,211,238,.12) inset}
+.halo::after{content:"";position:absolute;inset:-5%;border:1px dotted rgba(160,200,255,.3);border-radius:50%}
+.heroText{left:0;right:0;margin:auto;width:min(92vw,720px);max-width:none;text-align:center;bottom:11vh}
+.heroText h1{font-size:clamp(1.7rem,4.2vw,3.3rem)}
+.sub{margin:0 auto 1.4rem}.heroText .btns{justify-content:center}
+.note{top:auto;right:auto;left:3vw;bottom:22px}
+.hud{position:absolute;top:100px;width:260px;z-index:2;font-size:.8rem;padding:1rem}
+.hl{left:3vw}.hr{right:3vw}
+.hud h4{font:500 .8rem 'Space Grotesk';color:var(--cy);margin-bottom:.6rem;letter-spacing:.1em}
+.hrow{display:flex;justify-content:space-between;gap:.6rem;padding:.5rem .7rem;margin-bottom:.4rem;border:1px solid rgba(139,92,246,.45);border-radius:14px;cursor:pointer;transition:.2s}
+.hrow:hover{background:rgba(139,92,246,.28);box-shadow:0 0 18px rgba(139,92,246,.4)}
+.hrow span{color:var(--mu)}
+#hSel dl{font-size:.75rem;margin:.2rem 0}
+@media(max-width:1100px){.hud{display:none}}
+@media(min-width:821px){nav{display:flex;gap:.1rem;padding:.3rem;border-radius:99px;border:1px solid rgba(120,170,255,.3);background:rgba(10,18,40,.55)}nav a{margin:0;padding:.35rem .9rem;border-radius:99px}nav a:hover{background:rgba(34,211,238,.15);color:#fff}}
+</style>
+</head>
+<body>
+<div id="loader"><div class="rock"></div><p class="mono">INITIALISING ORBITAL SYSTEMS</p></div>
+
+<header>
+  <a class="logo" href="#hero">ASTROWATCH<span>AI</span></a>
+  <button id="burger" aria-label="Menu">☰</button>
+  <nav id="nav">
+    <a href="#overview">Overview</a><a href="#orbit">Orbit lab</a><a href="#catalogue">Catalogue</a>
+    <a href="#calendar">Approaches</a><a href="#compare">Compare</a><a href="#assistant">Assistant</a><a href="#impact">Impact</a><a href="#risk">Risk</a><a href="#learn">Learn</a>
+  </nav>
+</header>
+
+<section id="hero">
+  <canvas id="heroCanvas"></canvas>
+  <div class="heroText">
+    <p class="mono tag">Near-Earth Object Monitoring &amp; Orbital Intelligence Platform</p>
+    <h1>THE NEXT CLOSE APPROACH<br>STARTS WITH UNDERSTANDING.</h1>
+    <p class="sub">Explore near-Earth objects, visualize their orbital paths, and discover how astronomers monitor objects moving through our Solar System.</p>
+    <div class="btns"><a class="btn" href="#orbit">Explore the universe</a><a class="btn ghost" href="#catalogue">Open asteroid tracker</a></div>
+  </div>
+  <div class="halo"></div>
+  <aside class="hud hl glass"><h4>Tracked objects</h4><div id="hList"></div></aside>
+  <aside class="hud hr glass"><h4>Selected object</h4><div id="hSel" class="mono">Pick an object to inspect it.</div></aside>
+  <p class="note mono">Drag to rotate. Distances and sizes are exaggerated for visibility.</p>
+  <div class="scroll mono">SCROLL TO EXPLORE ↓</div>
+</section>
+
+<section id="overview" class="reveal">
+  <h2>Space overview</h2>
+  <p class="muted">Counts come from the dataset loaded below. <span id="status" class="badge">LOADING…</span></p>
+  <div class="grid4">
+    <div class="glass" title="Objects in the dataset currently loaded in this page."><small>Objects loaded</small><b id="m1">0</b></div>
+    <div class="glass" title="Loaded objects that have a recorded close-approach date."><small>Upcoming approaches</small><b id="m2">0</b></div>
+    <div class="glass" title="Objects you have opened for detailed analysis."><small>Selected for analysis</small><b id="m3">0</b></div>
+    <div class="glass" title="When this page last retrieved its data."><small>Dataset updated</small><span id="m4" class="mono">—</span></div>
+  </div>
+  <p id="srcNote" class="muted mono"></p>
+  <p id="dq" class="muted mono small"></p>
+  <label class="muted">Look-ahead window
+    <select id="days"><option value="30">30 days</option><option value="60" selected>60 days</option><option value="120">120 days</option></select>
+  </label>
+</section>
+
+<section id="orbit" class="reveal">
+  <h2>Orbital trajectory lab</h2>
+  <p class="muted">Drag to rotate, wheel to zoom. Pick an object in the catalogue to draw its orbit next to Earth's.</p>
+  <div class="lab">
+    <div class="glass canvasBox"><canvas id="orbitCanvas"></canvas></div>
+    <div class="glass side">
+      <h3 id="orbTitle">No object selected</h3>
+      <div id="orbInfo" class="mono small">Choose an object in the catalogue.</div>
+      <label>Time from epoch: <b id="date" class="mono"></b>
+        <input type="range" id="tl" min="-730" max="730" value="0"></label>
+      <label>Simulated uncertainty <input type="range" id="unc" min="0" max="100" value="30"></label>
+      <p class="warn small"><b>SIMULATED UNCERTAINTY</b> — the violet cloud is an illustration, not an official orbital uncertainty estimate.</p>
+      <div class="btns">
+        <button class="btn mini" id="pause">Pause</button><button class="btn mini" id="reset">Reset view</button><button class="btn mini" id="togRing">Toggle orbits</button>
+      </div>
+      <p class="muted small">Method: Kepler's equation from the object's semi-major axis, eccentricity and inclination. Mean anomaly at epoch is assumed 0 and node/perihelion angles are ignored, so positions are illustrative, not real predictions. 1 AU = 3 scene units.</p>
+    </div>
+  </div>
+</section>
+
+<section id="catalogue" class="reveal">
+  <h2>Asteroid catalogue</h2>
+  <div class="tools">
+    <input id="q" placeholder="Search name or designation…">
+    <select id="sort"><option value="name">Sort: name</option><option value="dia">Sort: diameter</option><option value="dist">Sort: miss distance</option></select>
+    <select id="flt"><option value="all">All sizes</option><option value="big">≥ 140 m</option><option value="small">&lt; 140 m</option></select>
+  </div>
+  <div class="split">
+    <div id="list" class="glass list"></div>
+    <div id="detail" class="glass"><p class="empty">🔭 Select an object to see its profile.</p></div>
+  </div>
+  <p class="muted small">Diameters marked "est." are computed from absolute magnitude H assuming an albedo of 0.14 — they can be off by a factor of two or more.</p>
+</section>
+
+<section id="calendar" class="reveal">
+  <h2>Close-approach calendar</h2>
+  <p class="muted">A close approach is not an impact prediction. 1 LD (lunar distance) ≈ 384,400 km.</p>
+  <button class="btn mini" id="calSort">Sorted by date — switch to distance</button>
+  <div id="cal" class="glass list"></div>
+</section>
+
+<section id="compare" class="reveal">
+  <h2>Asteroid comparison lab</h2>
+  <p class="muted">Add objects with “+ compare” in the catalogue. Differences are shown, never ranked as danger.</p>
+  <button class="btn" id="cmpBtn">COMPARE OBJECTS</button>
+  <div class="glass"><div class="scrollx"><table id="cmpTable"></table></div><div class="chartBox"><canvas id="chart"></canvas></div></div>
+</section>
+
+<section id="assistant" class="reveal">
+  <h2>ASTROWATCH INTELLIGENCE</h2>
+  <p class="muted">Your guide to near-Earth objects and orbital science. <span id="aiBadge" class="badge demo">RULE-BASED DEMO MODE</span> — without the backend it is not a language model and only restates the data on this page.</p>
+  <div class="glass chat">
+    <div class="chips" id="chips"></div>
+    <div id="log"></div>
+    <div class="ask"><input id="ask" placeholder="Ask about near-Earth objects…"><button class="btn mini" id="send">Send</button><button class="btn mini ghost" id="lang">English</button></div>
+  </div>
+</section>
+
+<section id="impact" class="reveal">
+  <h2>Hypothetical impact simulator</h2>
+  <p class="muted">Educational only. It estimates kinetic energy from simple physics and cannot predict real-world damage.</p>
+  <div class="glass">
+    <label>Diameter <b id="vd" class="mono"></b><input type="range" id="d" min="10" max="2000" value="100"></label>
+    <label>Density <b id="vr" class="mono"></b><input type="range" id="rho" min="500" max="8000" step="100" value="3000"></label>
+    <label>Impact speed <b id="vv" class="mono"></b><input type="range" id="v" min="5" max="40" value="20"></label>
+    <p id="out" class="mono big"></p>
+    <p class="muted small">Assumes a sphere. Ignores atmospheric breakup, angle, composition and location, so it cannot tell you what would happen on the ground.</p>
+  </div>
+</section>
+
+<section id="risk" class="reveal">
+  <h2>Published impact-risk table</h2>
+  <p class="muted">Straight from NASA JPL Sentry. This site never computes or invents impact probabilities, and most entries are cleared as new observations arrive.</p>
+  <div id="sentry" class="glass list"><p class="empty">Loading…</p></div>
+</section>
+
+<section id="learn" class="reveal">
+  <h2>Learn and test yourself</h2>
+  <div class="split">
+    <div class="glass"><h3>Quick quiz</h3><div id="quiz"></div><p id="qs" class="mono muted small">Score 0/4</p></div>
+    <div class="glass"><h3>Detection challenge</h3>
+      <p class="muted small">Simplified model: apparent magnitude V ≈ H + 5·log10(r·Δ), phase ignored. Not a survey model.</p>
+      <label>Absolute magnitude H (larger = smaller rock) <b id="hv" class="mono"></b><input type="range" id="H" min="16" max="30" step=".5" value="24"></label>
+      <label>Distance from Sun r, AU <b id="rv" class="mono"></b><input type="range" id="rr" min="1" max="3" step=".05" value="1.2"></label>
+      <label>Distance from Earth Δ, AU <b id="dv" class="mono"></b><input type="range" id="dd" min=".01" max="2" step=".01" value=".2"></label>
+      <label>Telescope <select id="tel"><option value="14">Backyard (limit 14)</option><option value="21">Survey telescope (21)</option><option value="24">Large telescope (24)</option></select></label>
+      <p id="det" class="mono big"></p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p class="mono">ASTROWATCH AI · Data: NASA/JPL CNEOS Close Approach Data API and Small-Body Database (check their usage terms). Independent educational project, not affiliated with NASA.</p>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>gsap.registerPlugin(ScrollTrigger);
+const $=s=>document.querySelector(s),AU=149597870.7,LD=384400,S=3,API=window.ASTRO_API||'http://localhost:8000';
+const f=(v,u='',d=2)=>v==null||isNaN(v)?'Not available':(+v).toFixed(d)+u;
+const DEMO=[
+ {des:'99942 Apophis',d:340,a:.922,e:.191,i:3.34,per:323.6,type:'Aten',cd:'2029-Apr-13 21:46',dist:.000254,v:7.4},
+ {des:'101955 Bennu',d:490,a:1.126,e:.204,i:6.03,per:436.6,type:'Apollo'},
+ {des:'162173 Ryugu',d:900,a:1.19,e:.19,i:5.88,per:474,type:'Apollo'},
+ {des:'65803 Didymos',d:780,a:1.644,e:.384,i:3.41,per:770,type:'Apollo'},
+ {des:'433 Eros',d:16800,a:1.458,e:.223,i:10.83,per:643,type:'Amor'}
+].map(o=>({...o,srcE:'Approximate published values (demo)'}));
+let data=[],sel=null,cmp=[],src='demo',stamp='',paused=false,lang='en',calSort='date',chart,rings=true;
+
+/* ---------- data ---------- */
+async function load(days){
+  $('#status').textContent='LOADING…';
+  try{
+    const iso=x=>x.toISOString().slice(0,10);
+    const r=await fetch(`https://ssd-api.jpl.nasa.gov/cad.api?dist-max=0.05&date-min=${iso(new Date())}&date-max=${iso(new Date(Date.now()+days*864e5))}&sort=date`);
+    if(!r.ok)throw 0;const j=await r.json();if(!j.data||!j.data.length)throw 0;
+    const ix=n=>j.fields.indexOf(n);
+    data=j.data.map(w=>{const h=+w[ix('h')];return{des:w[ix('des')],cd:w[ix('cd')],dist:+w[ix('dist')],v:+w[ix('v_rel')],h,d:isNaN(h)?null:1329/Math.sqrt(.14)*10**(-h/5)*1000,est:1,type:'NEO'}});
+    src='live';
+  }catch(e){data=DEMO.map(o=>({...o}));src='demo'}
+  stamp=new Date().toUTCString();sel=null;cmp=[];render();
+}
+function count(s,n){const el=$(s),o={v:+el.dataset.v||0};el.dataset.v=n;gsap.to(o,{v:n,duration:1,onUpdate:()=>el.textContent=Math.round(o.v)})}
+function render(){
+  $('#status').textContent=src==='live'?'LIVE DATA':'DEMO DATA';$('#status').className='badge '+(src==='live'?'live':'demo');
+  count('#m1',data.length);count('#m2',data.filter(o=>o.cd).length);count('#m3',sel?1:0);
+  $('#m4').textContent=stamp;
+  const pc=k=>Math.round(100*data.filter(o=>o[k]!=null&&!isNaN(o[k])).length/data.length);
+  $('#dq').textContent=`Data quality: diameter ${pc('d')}% · orbital elements ${pc('a')}% (fetched when you select an object) · approach date ${pc('cd')}%`;
+  $('#srcNote').textContent=src==='live'?'Source: NASA/JPL CNEOS Close Approach Data API (objects within 0.05 AU). Retrieved '+stamp:'Live request failed or returned nothing, so labelled demonstration data is shown.';
+  list();cal();cmpRender();hud();
+}
+function hud(){
+  $('#hList').innerHTML=data.slice(0,5).map(o=>`<div class="hrow" data-k="${data.indexOf(o)}"><b>${o.des}</b><span>${f(o.d,' m',0)}</span></div>`).join('');
+}
+$('#hList').onclick=e=>{const r=e.target.closest('[data-k]');if(r)pick(data[+r.dataset.k])};
+function list(){
+  const q=$('#q').value.toLowerCase(),s=$('#sort').value,fl=$('#flt').value;
+  const a=data.filter(o=>o.des.toLowerCase().includes(q)&&(fl==='all'||(fl==='big'?o.d>=140:o.d<140)));
+  a.sort((x,y)=>s==='name'?x.des.localeCompare(y.des):s==='dia'?(y.d||0)-(x.d||0):(x.dist??9)-(y.dist??9));
+  $('#list').innerHTML=a.length?a.map(o=>{const k=data.indexOf(o);return`<div class="row" data-k="${k}"><b>${o.des}</b><span class="mono">${f(o.d,' m',0)}${o.est?' est.':''}</span><span class="mono">${o.dist!=null?f(o.dist*AU/LD,' LD',1):''}</span><button class="mini" data-c="${k}">${cmp.includes(o)?'✓':'+'} compare</button></div>`}).join(''):'<p class="empty">☄️ No objects match. Clear the search or filter.</p>';
+}
+function cal(){
+  let a=data.filter(o=>o.cd);if(calSort==='dist')a=[...a].sort((x,y)=>x.dist-y.dist);
+  $('#cal').innerHTML=a.map(o=>`<div class="row" data-k="${data.indexOf(o)}"><span class="mono">${o.cd}</span><b>${o.des}</b><span class="mono">${Math.round(o.dist*AU).toLocaleString()} km · ${f(o.dist*AU/LD,' LD',1)}</span><span class="bar"><i style="width:${Math.min(100,o.dist/.05*100)}%"></i></span><span class="mono">${f(o.v,' km/s',1)}</span><a href="https://ssd.jpl.nasa.gov/tools/sbdb_lookup.html#/?sstr=${encodeURIComponent(o.des)}" target="_blank" rel="noopener">source</a></div>`).join('')||'<p class="empty">No close approaches recorded for this window.</p>';
+}
+async function pick(o){
+  sel=o;count('#m3',1);detail();
+  if(o.a==null){
+    try{const r=await fetch('https://ssd-api.jpl.nasa.gov/sbdb.api?sstr='+encodeURIComponent(o.des));const j=await r.json();
+      const g=n=>{const x=j.orbit.elements.find(e=>e.name===n);return x?+x.value:null};
+      o.a=g('a');o.e=g('e');o.i=g('i');o.per=g('per');o.type=(j.orbit.class&&j.orbit.class.name)||o.type;o.srcE='NASA/JPL Small-Body Database, epoch JD '+j.orbit.epoch}catch(e){o.noEl=1}
+  }
+  detail();setOrbit(o);loadTraj(o);
+}
+function detail(){
+  const o=sel;
+  $('#detail').innerHTML=`<h3>${o.des}</h3><dl><dt>Type</dt><dd>${o.type||'NEO'}</dd><dt>Diameter</dt><dd>${f(o.d,' m',0)}${o.est?' (est. from H)':''}</dd><dt>Semi-major axis</dt><dd>${f(o.a,' AU',3)}</dd><dt>Eccentricity</dt><dd>${f(o.e,'',3)}</dd><dt>Inclination</dt><dd>${f(o.i,'°',2)}</dd><dt>Period</dt><dd>${f(o.per,' days',0)}</dd><dt>Next approach</dt><dd>${o.cd||'Not available'}</dd><dt>Source</dt><dd>${o.srcE||(o.noEl?'Orbital elements could not be retrieved':'Loading elements…')}</dd></dl><p class="small muted">AU = astronomical unit, the average Earth–Sun distance (about 149.6 million km).</p><a class="btn mini" href="#orbit">View in orbit lab</a>`;
+  $('#hSel').innerHTML=`<b>${o.des}</b><dl><dt>Type</dt><dd>${o.type||'NEO'}</dd><dt>Diameter</dt><dd>${f(o.d,' m',0)}</dd><dt>Period</dt><dd>${f(o.per,' d',0)}</dd><dt>e / i</dt><dd>${f(o.e,'',2)} / ${f(o.i,'°',1)}</dd><dt>Approach</dt><dd>${o.cd||'Not available'}</dd></dl>`;
+}
+
+/* ---------- three.js helpers ---------- */
+const rd=()=>{const v=new THREE.Vector3(Math.random()-.5,Math.random()-.5,Math.random()-.5);return v.lengthSq()>1e-6?v.normalize():v.set(1,0,0)};
+function mk(c,fov,z){
+  const r=new THREE.WebGLRenderer({canvas:c,antialias:true,alpha:true});r.setPixelRatio(Math.min(devicePixelRatio,2));
+  const s=new THREE.Scene(),cam=new THREE.PerspectiveCamera(fov,1,.1,2000);cam.position.z=z;const g=new THREE.Group();s.add(g);
+  const rs=()=>{const w=c.clientWidth,h=c.clientHeight;r.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()};rs();addEventListener('resize',rs);
+  let dn=false,px,py;
+  c.addEventListener('pointerdown',e=>{dn=true;px=e.clientX;py=e.clientY});addEventListener('pointerup',()=>dn=false);
+  addEventListener('pointermove',e=>{if(dn){g.rotation.y+=(e.clientX-px)*.006;g.rotation.x=Math.max(-1.4,Math.min(1.4,g.rotation.x+(e.clientY-py)*.006));px=e.clientX;py=e.clientY}});
+  const st=[];for(let k=0;k<1800;k++){const v=rd().multiplyScalar(300+Math.random()*500);st.push(v)}
+  s.add(new THREE.Points(new THREE.BufferGeometry().setFromPoints(st),new THREE.PointsMaterial({size:1.4,color:0xcfe3ff,sizeAttenuation:false})));
+  return{r,s,cam,g,c}
+}
+function ring(a,b,col,tilt,op=.5){
+  const p=new THREE.EllipseCurve(0,0,a,b).getPoints(160).map(v=>new THREE.Vector3(v.x,0,v.y));
+  const l=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(p),new THREE.LineBasicMaterial({color:col,transparent:true,opacity:op}));l.rotation.x=tilt||0;return l
+}
+function earthTex(){
+  const c=document.createElement('canvas');c.width=1024;c.height=512;const x=c.getContext('2d');
+  x.fillStyle='#0b3d7a';x.fillRect(0,0,1024,512);
+  for(let k=0;k<70;k++){x.fillStyle=Math.random()<.5?'#2f7d4a':'#8a7a4a';x.beginPath();x.ellipse(Math.random()*1024,60+Math.random()*390,15+Math.random()*60,10+Math.random()*35,Math.random()*3,0,7);x.fill()}
+  x.fillStyle='rgba(255,255,255,.55)';
+  for(let k=0;k<90;k++){x.beginPath();x.ellipse(Math.random()*1024,Math.random()*512,20+Math.random()*60,4+Math.random()*10,Math.random()*3,0,7);x.fill()}
+  x.fillStyle='#e8f4ff';x.fillRect(0,0,1024,26);x.fillRect(0,486,1024,26);
+  return new THREE.CanvasTexture(c)
+}
+
+/* ---------- hero ---------- */
+const H=mk($('#heroCanvas'),50,7);
+const earth=new THREE.Mesh(new THREE.SphereGeometry(1.6,64,64),new THREE.MeshPhongMaterial({map:earthTex(),shininess:18}));H.g.add(earth);
+new THREE.TextureLoader().setCrossOrigin('anonymous').load('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',t=>{earth.material.map=t;earth.material.needsUpdate=true},undefined,()=>{});
+H.g.add(new THREE.Mesh(new THREE.SphereGeometry(1.78,48,48),new THREE.MeshBasicMaterial({color:0x38bdf8,transparent:true,opacity:.3,side:THREE.BackSide,blending:THREE.AdditiveBlending})));
+{const P=[],C=[];for(let k=0;k<1400;k++){P.push(rd().multiplyScalar(1.62+Math.random()*.35));const q=new THREE.Color(Math.random()<.6?0x67e8f9:0xe879f9);C.push(q.r,q.g,q.b)}
+const g=new THREE.BufferGeometry().setFromPoints(P);g.setAttribute('color',new THREE.Float32BufferAttribute(C,3));
+earth.add(new THREE.Points(g,new THREE.PointsMaterial({size:.03,vertexColors:true,transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false})))}
+[[2.3,2.0,.9,0x22d3ee],[2.9,2.4,-1.1,0xa855f7],[3.6,2.9,.2,0x22d3ee],[2.6,2.5,1.5,0xa855f7]].forEach(p=>H.g.add(ring(p[0],p[1],p[3],p[2],.9)));
+const sun=new THREE.DirectionalLight(0xffffff,1.3);sun.position.set(5,2,4);H.s.add(sun,new THREE.AmbientLight(0x334466,.8));
+const rocks=[[2.6,2.2,.4,0x22d3ee],[3.3,2.6,-.5,0x8b5cf6],[4.1,3.4,.9,0x22d3ee],[3.0,3.0,1.3,0x8b5cf6]].map((p,k)=>{
+  H.g.add(ring(p[0],p[1],p[3],p[2],.6));
+  const m=new THREE.Mesh(new THREE.IcosahedronGeometry(.07+k*.01,0),new THREE.MeshPhongMaterial({color:0x9aa3b5,flatShading:true}));
+  const piv=new THREE.Group();piv.rotation.x=p[2];piv.add(m);H.g.add(piv);return{m,a:p[0],b:p[1],ph:k*1.7,sp:.35-k*.05}
+});
+let mx=0,my=0;addEventListener('pointermove',e=>{mx=e.clientX/innerWidth-.5;my=e.clientY/innerHeight-.5;document.body.style.setProperty('--mx',e.clientX+'px');document.body.style.setProperty('--my',e.clientY+'px')});
+gsap.to(H.cam.position,{z:3.6,scrollTrigger:{trigger:'#hero',start:'top top',end:'bottom top',scrub:true}});
+gsap.to('.heroText',{opacity:0,y:-60,scrollTrigger:{trigger:'#hero',start:'20% top',end:'80% top',scrub:true}});
+
+/* ---------- orbit lab ---------- */
+const O=mk($('#orbitCanvas'),45,10);O.g.rotation.x=.55;
+const base=O.g.rotation.x;
+O.g.add(new THREE.Mesh(new THREE.SphereGeometry(.28,24,24),new THREE.MeshBasicMaterial({color:0xffd166})));
+const eo=ring(S,S,0x22d3ee,0,.7);O.g.add(eo);
+const eMark=new THREE.Mesh(new THREE.SphereGeometry(.1,16,16),new THREE.MeshBasicMaterial({color:0x3b82f6}));O.g.add(eMark);
+const aMark=new THREE.Mesh(new THREE.IcosahedronGeometry(.1,0),new THREE.MeshBasicMaterial({color:0xfbbf24}));aMark.visible=false;O.g.add(aMark);
+let aLine=null;
+const U=[];for(let k=0;k<90;k++)U.push(rd().multiplyScalar(Math.cbrt(Math.random())));
+const cloud=new THREE.Points(new THREE.BufferGeometry().setFromPoints(U),new THREE.PointsMaterial({size:.05,color:0x8b5cf6,transparent:true,opacity:.8}));cloud.visible=false;O.g.add(cloud);
+O.c.addEventListener('wheel',e=>{e.preventDefault();O.cam.position.z=Math.max(4,Math.min(30,O.cam.position.z+e.deltaY*.01))},{passive:false});
+const pt=(a,e,i,E)=>{const x=a*(Math.cos(E)-e),y=a*Math.sqrt(1-e*e)*Math.sin(E);return new THREE.Vector3(x*S,y*Math.sin(i)*S,y*Math.cos(i)*S)};
+function kep(o,t){
+  let M=2*Math.PI*(t/o.per);M=((M+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;let E=M;
+  for(let k=0;k<8;k++)E=M+o.e*Math.sin(E);return pt(o.a,o.e,o.i*Math.PI/180,E)
+}
+function setOrbit(o){
+  if(aLine){O.g.remove(aLine);aLine=null}
+  const ok=o.a!=null&&o.e!=null&&o.i!=null&&o.per!=null;
+  aMark.visible=cloud.visible=ok;$('#orbTitle').textContent=o.des;
+  $('#orbInfo').innerHTML=ok?`Type: ${o.type||'NEO'}<br>Period: ${f(o.per,' d',0)} · a: ${f(o.a,' AU',3)}<br>e: ${f(o.e,'',3)} · i: ${f(o.i,'°',2)}<br>Source: ${o.srcE}`:'Orbital elements not available, so only Earth\'s orbit is drawn.';
+  if(!ok)return;
+  const p=[];for(let k=0;k<=200;k++)p.push(pt(o.a,o.e,o.i*Math.PI/180,k/200*2*Math.PI));
+  aLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(p),new THREE.LineBasicMaterial({color:0xfbbf24}));aLine.visible=rings;O.g.add(aLine);
+}
+const sc=a=>new THREE.Vector3(a[0]*S,a[2]*S,a[1]*S);
+async function loadTraj(o){
+  if(o.traj||o.trajFail||o.a==null)return;
+  try{const r=await fetch(`${API}/api/trajectory?des=${encodeURIComponent(o.des)}&days=730&step=10`);if(!r.ok)throw 0;o.traj=await r.json();o.traj.days=730;o.traj.step=10}catch(e){o.trajFail=1;return}
+  if(sel!==o)return;
+  if(aLine)O.g.remove(aLine);
+  aLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(o.traj.points.map(q=>sc(q.obj))),new THREE.LineBasicMaterial({color:0xfbbf24}));aLine.visible=rings;O.g.add(aLine);
+  $('#orbInfo').innerHTML+='<br><b>Backend (Skyfield):</b> '+o.traj.method;upd();
+}
+function upd(){
+  const t=+$('#tl').value;$('#date').textContent=new Date(Date.now()+t*864e5).toISOString().slice(0,10)+' ('+(t>=0?'+':'')+t+' d)';
+  const th=2*Math.PI*t/365.25;eMark.position.set(Math.cos(th)*S,0,Math.sin(th)*S);
+  if(sel&&aMark.visible){
+    let p=kep(sel,t),k=.02+($('#unc').value/100)*.9*Math.abs(t)/365;
+    if(sel.traj){const T=sel.traj,q=T.points[Math.max(0,Math.min(T.points.length-1,Math.round((t+T.days)/T.step)))];
+      p=sc(q.obj);eMark.position.copy(sc(q.earth));k=Math.max(.02,q.sigma*S*$('#unc').value/10);
+      $('#date').textContent+=' · Earth distance '+Math.round(q.dist*AU).toLocaleString()+' km'}
+    aMark.position.copy(p);cloud.position.copy(p);cloud.scale.setScalar(k)
+  }
+}
+$('#tl').oninput=upd;$('#unc').oninput=upd;
+$('#pause').onclick=e=>{paused=!paused;e.target.textContent=paused?'Play':'Pause'};
+$('#reset').onclick=()=>{O.g.rotation.set(base,0,0);O.cam.position.z=10;$('#tl').value=0;upd()};
+$('#togRing').onclick=()=>{rings=!rings;eo.visible=rings;if(aLine)aLine.visible=rings};
+
+/* ---------- loop ---------- */
+const clock=new THREE.Clock();
+(function tick(){
+  requestAnimationFrame(tick);const t=clock.getElapsedTime();
+  earth.rotation.y=t*.08;H.g.rotation.y+=.0008;
+  rocks.forEach(r=>{const a=t*r.sp+r.ph;r.m.position.set(Math.cos(a)*r.a,0,Math.sin(a)*r.b);r.m.rotation.x+=.01;r.m.rotation.y+=.013});
+  H.cam.position.x+=(mx*1.2-H.cam.position.x)*.04;H.cam.position.y+=(-my*.8-H.cam.position.y)*.04;H.cam.lookAt(0,0,0);
+  H.r.render(H.s,H.cam);
+  if(!paused){const sl=$('#tl');if(sel){sl.value=+sl.value+.6>730?-730:+sl.value+.6;upd()}}
+  O.cam.lookAt(0,0,0);O.r.render(O.s,O.cam);
+})();
+upd();
+
+/* ---------- compare ---------- */
+function cmpRender(){
+  const T=$('#cmpTable');
+  if(cmp.length<2){T.innerHTML='<tr><td>Choose at least two objects with “+ compare” in the catalogue.</td></tr>';if(chart){chart.destroy();chart=null}return}
+  const rows=[['Diameter',o=>f(o.d,' m',0)],['Semi-major axis',o=>f(o.a,' AU',3)],['Eccentricity',o=>f(o.e,'',3)],['Inclination',o=>f(o.i,'°',2)],['Period',o=>f(o.per,' d',0)],['Miss distance',o=>o.dist!=null?f(o.dist*AU,' km',0):'Not available'],['Relative velocity',o=>f(o.v,' km/s',1)]];
+  T.innerHTML='<tr><th></th>'+cmp.map(o=>`<th>${o.des}</th>`).join('')+'</tr>'+rows.map(r=>`<tr><td>${r[0]}</td>${cmp.map(o=>`<td>${r[1](o)}</td>`).join('')}</tr>`).join('');
+  if(chart)chart.destroy();
+  chart=new Chart($('#chart'),{type:'bar',data:{labels:cmp.map(o=>o.des),datasets:[{label:'Diameter (m, log scale)',data:cmp.map(o=>o.d||0),backgroundColor:'#22d3ee99'},{label:'Period (days)',data:cmp.map(o=>o.per||0),backgroundColor:'#8b5cf699'}]},options:{maintainAspectRatio:false,scales:{y:{type:'logarithmic'}}}});
+}
+
+/* ---------- assistant ---------- */
+const KB=[
+ [/near.?earth|neo\b|what is a/,'A near-Earth object (NEO) is an asteroid or comet whose orbit brings it within about 1.3 AU of the Sun, so it can pass fairly close to Earth. Most are harmless.','ಸಮೀಪ-ಭೂಮಿ ವಸ್ತು (NEO) ಎಂದರೆ ಸೂರ್ಯನ ಸುತ್ತ ಸುತ್ತುತ್ತಾ ಭೂಮಿಯ ಕಕ್ಷೆಯ ಹತ್ತಿರ ಬರಬಲ್ಲ ಕ್ಷುದ್ರಗ್ರಹ ಅಥವಾ ಧೂಮಕೇತು. ಅವುಗಳಲ್ಲಿ ಹೆಚ್ಚಿನವು ಅಪಾಯಕಾರಿಯಲ್ಲ.'],
+ [/miss|distance/,'Miss distance is how far the object passes from Earth at closest approach, shown in km or lunar distances (1 LD ≈ 384,400 km).','ಮಿಸ್ ಡಿಸ್ಟೆನ್ಸ್ ಎಂದರೆ ವಸ್ತು ಭೂಮಿಗೆ ಅತ್ಯಂತ ಹತ್ತಿರ ಬಂದಾಗ ಇರುವ ಅಂತರ. 1 LD ≈ 3,84,400 ಕಿ.ಮೀ (ಚಂದ್ರನ ದೂರ).'],
+ [/uncertain|calculat/,'Orbits are fitted to imperfect observations, so a future position is an estimate with an error region that usually grows with time. The uncertainty cloud in the orbit lab is simulated, not official.','ಕಕ್ಷೆಗಳನ್ನು ಅಪೂರ್ಣ ವೀಕ್ಷಣೆಗಳಿಂದ ಲೆಕ್ಕಿಸುವುದರಿಂದ ಭವಿಷ್ಯದ ಸ್ಥಾನ ಒಂದು ಅಂದಾಜು. ಇಲ್ಲಿರುವ ಅನಿಶ್ಚಿತತೆಯ ಮೋಡ ಸಿಮ್ಯುಲೇಟೆಡ್ ಮಾತ್ರ.'],
+ [/observation|why/,'Each new observation narrows the possible orbits, which shrinks the uncertainty and can confirm or rule out a future close pass.','ಪ್ರತಿ ಹೊಸ ವೀಕ್ಷಣೆಯೂ ಸಾಧ್ಯವಿರುವ ಕಕ್ಷೆಗಳನ್ನು ಕಡಿಮೆ ಮಾಡಿ ಅನಿಶ್ಚಿತತೆಯನ್ನು ಕುಗ್ಗಿಸುತ್ತದೆ.'],
+ [/impact|collid|hit|differ/,'A close approach only means an object passes near Earth. An impact needs a predicted collision, and only agencies such as NASA CNEOS (Sentry) compute impact probabilities. This site never invents them.','ಸಮೀಪ ಸಂಚಾರ ಎಂದರೆ ಕೇವಲ ಹತ್ತಿರ ಹಾದುಹೋಗುವುದು. ಡಿಕ್ಕಿಯ ಸಂಭವನೀಯತೆಯನ್ನು NASA ಸೆಂಟ್ರಿಯಂತಹ ಸಂಸ್ಥೆಗಳು ಮಾತ್ರ ಲೆಕ್ಕಿಸುತ್ತವೆ. ಈ ಸೈಟ್ ಅದನ್ನು ಸೃಷ್ಟಿಸುವುದಿಲ್ಲ.']
+];
+function summary(){
+  const o=sel;if(!o)return['Select an object in the catalogue first, then ask again.','ಮೊದಲು ಕ್ಯಾಟಲಾಗ್‌ನಲ್ಲಿ ಒಂದು ವಸ್ತುವನ್ನು ಆಯ್ಕೆಮಾಡಿ.'];
+  return[`${o.des}: diameter ${f(o.d,' m',0)}, semi-major axis ${f(o.a,' AU',3)}, eccentricity ${f(o.e,'',3)}, inclination ${f(o.i,'°',1)}, period ${f(o.per,' days',0)}. Eccentricity shows how stretched the orbit is (0 = circle); inclination is its tilt against Earth's orbit. Missing values are never estimated.`,
+  `${o.des}: ವ್ಯಾಸ ${f(o.d,' m',0)}, a ${f(o.a,' AU',3)}, e ${f(o.e,'',3)}, i ${f(o.i,'°',1)}, ಅವಧಿ ${f(o.per,' days',0)}. ಉತ್ಕೇಂದ್ರತೆ (e) ಕಕ್ಷೆ ಎಷ್ಟು ಉದ್ದವಾಗಿದೆ ಎಂದು ತೋರಿಸುತ್ತದೆ; ಇಳಿಜಾರು (i) ಭೂಮಿಯ ಕಕ್ಷೆಗೆ ಹೋಲಿಸಿದ ವಾಲಿಕೆ. ಲಭ್ಯವಿಲ್ಲದ ಮೌಲ್ಯಗಳನ್ನು ಊಹಿಸಿಲ್ಲ.`]
+}
+function say(t,c){const d=document.createElement('div');d.className='msg '+c;d.textContent=t;$('#log').append(d);$('#log').scrollTop=1e5}
+async function ask(q){
+  if(!q.trim())return;say(q,'u');
+  try{const w=await fetch(API+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,lang,object:sel&&{des:sel.des,diameter_m:sel.d,a_au:sel.a,e:sel.e,i_deg:sel.i,period_days:sel.per,next_approach:sel.cd,miss_distance_au:sel.dist}})});
+    if(!w.ok)throw 0;say((await w.json()).answer,'a');$('#aiBadge').textContent='AI MODE (BACKEND)';return}catch(e){}
+  const l=q.toLowerCase();let r;
+  if(/this|selected|summar|simple|compare/.test(l)&&!/what is a near/.test(l))r=summary();
+  else r=KB.find(k=>k[0].test(l));
+  r=r||['I can explain NEOs, miss distance, uncertainty, observations and impacts, or summarise the selected object.','NEO, ಮಿಸ್ ಡಿಸ್ಟೆನ್ಸ್, ಅನಿಶ್ಚಿತತೆ, ಡಿಕ್ಕಿ ಅಥವಾ ಆಯ್ಕೆ ಮಾಡಿದ ವಸ್ತುವಿನ ಬಗ್ಗೆ ಕೇಳಿ.'];
+  const a=r.length===2?r:[r[1],r[2]];say(lang==='en'?a[0]:a[1],'a');
+}
+['What is a near-Earth object?','What does miss distance mean?','Explain this asteroid in simple terms','How is uncertainty calculated?','Close approach vs impact?'].forEach(q=>{const b=document.createElement('button');b.textContent=q;b.onclick=()=>ask(q);$('#chips').append(b)});
+$('#send').onclick=()=>{ask($('#ask').value);$('#ask').value=''};
+$('#ask').onkeydown=e=>{if(e.key==='Enter')$('#send').click()};
+$('#lang').onclick=e=>{lang=lang==='en'?'kn':'en';e.target.textContent=lang==='en'?'English':'ಕನ್ನಡ'};
+say('Hello. I explain the data on this page and never invent measurements. Try a question above. Switch to ಕನ್ನಡ with the language button.','a');
+
+/* ---------- impact ---------- */
+function imp(){
+  const d=+$('#d').value,rho=+$('#rho').value,v=+$('#v').value;
+  $('#vd').textContent=d+' m';$('#vr').textContent=rho+' kg/m³';$('#vv').textContent=v+' km/s';
+  const m=rho*Math.PI/6*d**3,E=.5*m*(v*1000)**2,mt=E/4.184e15;
+  $('#out').innerHTML=`Mass ≈ ${m.toExponential(2)} kg<br>Kinetic energy ≈ ${E.toExponential(2)} J ≈ ${mt<1?(mt*1000).toFixed(1)+' kilotons':mt.toFixed(1)+' megatons'} TNT<br>≈ ${(mt*1000/15).toFixed(0)} × the Hiroshima bomb (15 kt)`;
+}
+['d','rho','v'].forEach(i=>$('#'+i).oninput=imp);imp();
+
+/* ---------- wiring ---------- */
+$('#list').onclick=e=>{const c=e.target.closest('[data-c]');
+  if(c){e.stopPropagation();const o=data[+c.dataset.c];cmp=cmp.includes(o)?cmp.filter(x=>x!==o):[...cmp,o];list();cmpRender();return}
+  const r=e.target.closest('[data-k]');if(r)pick(data[+r.dataset.k])};
+$('#cal').onclick=e=>{if(e.target.tagName==='A')return;const r=e.target.closest('[data-k]');if(r){pick(data[+r.dataset.k]);$('#catalogue').scrollIntoView()}};
+['#q','#sort','#flt'].forEach(s=>$(s).oninput=list);
+$('#days').onchange=e=>load(e.target.value);
+$('#calSort').onclick=e=>{calSort=calSort==='date'?'dist':'date';e.target.textContent=calSort==='date'?'Sorted by date — switch to distance':'Sorted by distance — switch to date';cal()};
+$('#cmpBtn').onclick=()=>{cmpRender();$('#compare').scrollIntoView()};
+$('#burger').onclick=()=>$('#nav').classList.toggle('open');
+$('#nav').onclick=()=>$('#nav').classList.remove('open');
+gsap.utils.toArray('.reveal').forEach(el=>gsap.from(el,{y:50,opacity:0,duration:.9,scrollTrigger:{trigger:el,start:'top 85%'}}));
+let ready=0;
+const go=()=>{if(ready++)return;gsap.to('#loader',{opacity:0,duration:.6,onComplete:()=>$('#loader').remove()});gsap.from('.heroText>*',{y:40,opacity:0,stagger:.15,delay:.2})};
+addEventListener('load',go);setTimeout(go,1800);
+/* ---------- Sentry impact-risk table (NASA data only) ---------- */
+(async()=>{
+  try{const r=await fetch('https://ssd-api.jpl.nasa.gov/sentry.api');if(!r.ok)throw 0;const j=await r.json();
+    const a=j.data.sort((x,y)=>+y.ip-+x.ip).slice(0,15);
+    $('#sentry').innerHTML='<table><tr><th>Object</th><th>Cumulative impact probability</th><th>Years</th><th>Diameter (km)</th><th>Max Torino</th></tr>'+a.map(o=>`<tr><td>${o.des}</td><td>${(+o.ip).toExponential(1)}</td><td>${o.range}</td><td>${o.diameter||'n/a'}</td><td>${o.ts_max}</td></tr>`).join('')+`</table><p class="small muted">Top 15 by probability. Retrieved ${new Date().toUTCString()} from NASA JPL Sentry (cneos.jpl.nasa.gov/sentry).</p>`;
+  }catch(e){$('#sentry').innerHTML='<p class="empty">Sentry data is unavailable right now. See cneos.jpl.nasa.gov/sentry for the official table.</p>'}
+})();
+
+/* ---------- quiz + detection simulator ---------- */
+const QZ=[['A near-Earth object is always dangerous.',false,'No. Most never threaten Earth.'],['A close approach means an impact is predicted.',false,'No. It only means a near pass.'],['More observations usually shrink orbit uncertainty.',true,'Yes.'],['1 AU is about the Earth–Sun distance.',true,'Yes, about 149.6 million km.']];
+let score=0;
+QZ.forEach(q=>{const d=document.createElement('div');d.className='row';
+  d.innerHTML=`<span style="color:var(--tx)">${q[0]}</span><span><button class="mini" data-a="1">True</button> <button class="mini" data-a="0">False</button></span>`;
+  d.onclick=e=>{const b=e.target.closest('[data-a]');if(!b||d.dataset.done)return;d.dataset.done=1;const ok=(b.dataset.a==='1')===q[1];
+    const n=document.createElement('small');n.style.cssText='width:100%;color:'+(ok?'#4ade80':'#fbbf24');n.textContent=(ok?'Correct. ':'Not quite. ')+q[2];d.append(n);
+    if(ok)score++;$('#qs').textContent='Score '+score+'/'+QZ.length};
+  $('#quiz').append(d)});
+function det(){
+  const H=+$('#H').value,r=+$('#rr').value,D=+$('#dd').value,lim=+$('#tel').value;
+  $('#hv').textContent=H;$('#rv').textContent=r;$('#dv').textContent=D;
+  const V=H+5*Math.log10(r*D);
+  $('#det').innerHTML=`V ≈ ${V.toFixed(1)} · telescope limit ${lim}<br>${V<=lim?'Likely detectable if it is in the field of view and the sky is dark':'Too faint under these assumptions'}`;
+}
+['H','rr','dd','tel'].forEach(i=>$('#'+i).oninput=det);det();
+load(60);
+</script>
+</body>
+</html>
