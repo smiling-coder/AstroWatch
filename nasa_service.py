@@ -230,3 +230,109 @@ def get_neo_details(neo_id):
     )
 
     return _normalize_neo(data)
+
+def get_neo_orbit(search_string):
+    """
+    Retrieve orbital elements from the JPL Small-Body Database.
+
+    search_string should preferably be the asteroid's official
+    designation or name, such as "99942 Apophis".
+
+    The response includes available orbital elements and metadata.
+    """
+
+    if not search_string or not search_string.strip():
+        raise ValueError("An asteroid name or designation is required.")
+
+    url = "https://ssd-api.jpl.nasa.gov/sbdb.api"
+
+    try:
+        response = _session.get(
+            url,
+            params={
+                "sstr": search_string.strip(),
+                "full-prec": "true"
+            },
+            timeout=REQUEST_TIMEOUT
+        )
+
+        response.raise_for_status()
+        data = response.json()
+
+    except requests.Timeout as exc:
+        raise NASAServiceError(
+            "The JPL orbital-data request timed out."
+        ) from exc
+
+    except requests.HTTPError as exc:
+        raise NASAServiceError(
+            "The JPL orbital-data service returned an HTTP error."
+        ) from exc
+
+    except (requests.RequestException, ValueError) as exc:
+        raise NASAServiceError(
+            "Could not retrieve valid JPL orbital data."
+        ) from exc
+
+    if data.get("code") not in (None, 200):
+        raise NASAServiceError(
+            data.get("message", "JPL could not resolve this object.")
+        )
+
+    orbit = data.get("orbit") or {}
+    raw_elements = orbit.get("elements") or []
+
+    # JPL returns elements as a list of objects, not a single dictionary.
+    elements = {}
+
+    for item in raw_elements:
+        name = item.get("name")
+
+        if not name:
+            continue
+
+        value = item.get("value")
+
+        try:
+            value = float(value) if value is not None else None
+        except (TypeError, ValueError):
+            value = None
+
+        elements[name] = {
+            "value": value,
+            "sigma": item.get("sigma"),
+            "units": item.get("units"),
+            "label": item.get("label")
+        }
+
+    def get_value(name):
+        return elements.get(name, {}).get("value")
+
+    required = ("a", "e", "i", "om", "w", "ma")
+
+    available_for_geometry = all(
+        get_value(name) is not None for name in required
+    )
+
+    return {
+        "source": "JPL Small-Body Database",
+        "object": data.get("object", {}),
+        "orbit": {
+            "orbit_id": orbit.get("orbit_id"),
+            "epoch_jd_tdb": orbit.get("epoch"),
+            "epoch_calendar": orbit.get("epoch_cal"),
+            "equinox": orbit.get("equinox"),
+            "solution_date": orbit.get("soln_date"),
+            "condition_code": orbit.get("condition_code"),
+            "observation_count": orbit.get("n_obs_used"),
+            "data_arc_days": orbit.get("data_arc"),
+            "moid_au": orbit.get("moid"),
+            "elements": elements,
+            "geometry_available": available_for_geometry
+        },
+        "scientific_note": (
+            "Osculating orbital elements apply at a specific epoch. "
+            "The browser visualization uses a simplified two-body "
+            "approximation and is not a precision ephemeris."
+        )
+    }
