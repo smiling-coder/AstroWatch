@@ -1,681 +1,922 @@
-"use strict";
+import * as THREE from "three";
 
-const API_BASE = window.location.protocol === "file:"
-    ? "http://127.0.0.1:5000"
-    : window.location.origin;
+import { OrbitControls } from
+    "three/addons/controls/OrbitControls.js";
 
-const canvasContainer = document.getElementById("spaceCanvas");
+/*
+ * AstroWatch AI frontend.
+ *
+ * Local development:
+ *   http://127.0.0.1:5000/api
+ *
+ * Production:
+ *   Set API_BASE_URL to your deployed Flask backend.
+ */
 
-let scene;
-let camera;
-let renderer;
-let earth;
-let earthGroup;
-let asteroidMeshes = [];
-let orbitObjects = [];
-let selectedObjectId = null;
-let rotationPaused = false;
-let animationFrameId = null;
+const API_BASE_URL = (
+    window.ASTROWATCH_API_URL || "http://127.0.0.1:5000/api"
+).replace(/\/$/, "");
 
-let objects = [];
+const $ = (id) => document.getElementById(id);
 
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
-
-const riskDescriptions = {
-    HIGH: "This object falls into the prototype's highest demonstration category. It does not indicate a real impact probability.",
-    MEDIUM: "This object falls into the prototype's middle demonstration category. More orbital information would be needed for a scientific assessment.",
-    LOW: "This object falls into the prototype's lowest demonstration category. This does not guarantee that an object is harmless."
+const state = {
+    objects: [],
+    selected: null,
+    filteredObjects: [],
+    diameterChart: null,
+    velocityChart: null,
+    scene: null,
+    camera: null,
+    renderer: null,
+    controls: null,
+    asteroidMeshes: new Map(),
+    focusTarget: null,
+    resizeObserver: null
 };
 
+const numberFormatter = new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 2
+});
 
-// ------------------------------
-// API REQUESTS
-// ------------------------------
+function formatNumber(value, digits = 2) {
+    if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+        return "Not available";
+    }
 
-async function fetchObjects() {
-    try {
-        const response = await fetch(`${API_BASE}/api/objects`);
+    return Number(value).toLocaleString("en-US", {
+        maximumFractionDigits: digits
+    });
+}
 
-        if (!response.ok) {
-            throw new Error("Could not retrieve object data.");
-        }
+function formatDate(value) {
+    if (!value) return "Not available";
 
-        const data = await response.json();
+    const date = new Date(`${value}T00:00:00`);
 
-        objects = data.objects;
+    if (Number.isNaN(date.getTime())) return value;
 
-        renderStatistics(data);
-        renderTable(objects);
-        initialiseScene();
-        updateSelectedObject(objects[0]);
+    return date.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric"
+    });
+}
 
-    } catch (error) {
-        console.error(error);
+function setText(id, value) {
+    const element = $(id);
 
-        canvasContainer.innerHTML = `
-            <div style="
-                padding: 35px;
-                color: #ff9aa9;
-                font-size: 13px;
-                line-height: 2;
-            ">
-                <h3>Backend connection unavailable</h3>
-                <p>Start the Python Flask server and refresh this page.</p>
-                <p>Run: python app.py</p>
-            </div>
-        `;
+    if (element) {
+        element.textContent = value;
     }
 }
 
+function setConnectionStatus(message, healthy = false) {
+    setText("connectionStatus", message);
 
-// ------------------------------
-// DASHBOARD STATISTICS
-// ------------------------------
+    const dot = document.querySelector(".header-status .status-dot");
 
-function renderStatistics(data) {
-    document.getElementById("objectCount").textContent =
-        data.statistics.total_objects;
-
-    document.getElementById("approachCount").textContent =
-        data.statistics.close_approaches;
-
-    document.getElementById("riskCount").textContent =
-        data.statistics.high_risk_demonstrations;
+    if (dot) {
+        dot.style.background = healthy ? "#63e6be" : "#ff7f9d";
+        dot.style.boxShadow = healthy
+            ? "0 0 12px rgba(99,230,190,.65)"
+            : "0 0 12px rgba(255,127,157,.5)";
+    }
 }
 
+function showError(message) {
+    const element = $("errorMessage");
 
-// ------------------------------
-// ASTEROID TABLE
-// ------------------------------
+    if (!element) return;
 
-function renderTable(list) {
-    const tbody = document.getElementById("asteroidTable");
+    element.hidden = !message;
+    element.textContent = message || "";
+}
 
-    if (!list.length) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="6">No matching demonstration objects found.</td>
-            </tr>
-        `;
+async function apiGet(path) {
+    const response = await fetch(`${API_BASE_URL}${path}`);
+
+    let data;
+
+    try {
+        data = await response.json();
+    } catch {
+        throw new Error("The backend returned an invalid response.");
+    }
+
+    if (!response.ok) {
+        throw new Error(
+            data.error || `Request failed with HTTP ${response.status}.`
+        );
+    }
+
+    return data;
+}
+
+function setInitialDates() {
+    const today = new Date();
+    const end = new Date(today);
+    end.setDate(end.getDate() + 2);
+
+    const startString = today.toISOString().slice(0, 10);
+    const endString = end.toISOString().slice(0, 10);
+
+    $("startDate").value = startString;
+    $("endDate").value = endString;
+
+    $("startDate").max = endString;
+    $("endDate").min = startString;
+}
+
+async function checkBackend() {
+    try {
+        const result = await apiGet("/health");
+
+        setConnectionStatus(
+            result.status === "ok" ? "Backend online" : "Backend status",
+            result.status === "ok"
+        );
+
+        return true;
+    } catch (error) {
+        setConnectionStatus("Backend offline");
+
+        showError(
+            `Cannot connect to Flask. Start the Python backend first. ${error.message}`
+        );
+
+        return false;
+    }
+}
+
+async function loadAsteroids() {
+    const start = $("startDate").value;
+    const end = $("endDate").value;
+
+    if (!start || !end) {
+        showError("Please select both a start date and an end date.");
+        return;
+    }
+
+    if (end < start) {
+        showError("The end date cannot be earlier than the start date.");
+        return;
+    }
+
+    const startTime = new Date(`${start}T00:00:00Z`).getTime();
+    const endTime = new Date(`${end}T00:00:00Z`).getTime();
+    const intervalDays = (endTime - startTime) / 86400000;
+
+    if (intervalDays > 6) {
+        showError("Select a maximum seven-day date interval.");
+        return;
+    }
+
+    const submitButton = document.querySelector(
+        "#dateFilterForm button[type='submit']"
+    );
+
+    submitButton.disabled = true;
+    submitButton.textContent = "Loading...";
+
+    showError("");
+
+    try {
+        const data = await apiGet(
+            `/neos?start_date=${encodeURIComponent(start)}` +
+            `&end_date=${encodeURIComponent(end)}`
+        );
+
+        state.objects = Array.isArray(data.objects)
+            ? data.objects
+            : [];
+
+        state.selected = null;
+
+        setText(
+            "dataUpdated",
+            `NASA data retrieved: ${new Date().toLocaleTimeString()}`
+        );
+
+        setText("dataStatus", "Live");
+        setConnectionStatus("NASA data loaded", true);
+
+        updateStatistics(data);
+        applyFilters();
+        updateCharts();
+
+    } catch (error) {
+        showError(error.message);
+
+        setText("dataStatus", "Error");
+        setConnectionStatus("Data unavailable");
+
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = "Load Data";
+    }
+}
+
+function updateStatistics(data) {
+    setText("totalObjects", numberFormatter.format(
+        data.total_objects ?? state.objects.length
+    ));
+
+    setText("approachCount", numberFormatter.format(
+        data.approach_records ?? 0
+    ));
+
+    setText("hazardCount", numberFormatter.format(
+        data.potentially_hazardous_count ?? 0
+    ));
+}
+
+function getDiameter(neo) {
+    const min = neo.diameter_km_min;
+    const max = neo.diameter_km_max;
+
+    if (
+        min === null || min === undefined ||
+        max === null || max === undefined
+    ) {
+        return null;
+    }
+
+    return (Number(min) + Number(max)) / 2;
+}
+
+function applyFilters() {
+    const query = $("searchInput").value.trim().toLowerCase();
+    const hazardFilter = $("hazardFilter").value;
+
+    state.filteredObjects = state.objects.filter((neo) => {
+        const matchesSearch =
+            String(neo.name || "").toLowerCase().includes(query) ||
+            String(neo.id || "").toLowerCase().includes(query);
+
+        const hazardous = neo.is_potentially_hazardous === true;
+
+        const matchesHazard =
+            hazardFilter === "all" ||
+            (hazardFilter === "hazardous" && hazardous) ||
+            (hazardFilter === "nonhazardous" && !hazardous);
+
+        return matchesSearch && matchesHazard;
+    });
+
+    renderTable();
+    renderAsteroidMarkers();
+}
+
+function addCell(row, text) {
+    const cell = document.createElement("td");
+    cell.textContent = text;
+    row.appendChild(cell);
+
+    return cell;
+}
+
+function renderTable() {
+    const body = $("asteroidTableBody");
+    body.replaceChildren();
+
+    setText(
+        "tableCount",
+        `${state.filteredObjects.length} records`
+    );
+
+    if (state.filteredObjects.length === 0) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+
+        cell.colSpan = 6;
+        cell.className = "empty-state";
+        cell.textContent = "No matching records.";
+
+        row.appendChild(cell);
+        body.appendChild(row);
 
         return;
     }
 
-    tbody.innerHTML = list.map(object => `
-        <tr>
-            <td>
-                <span class="object-name">
-                    ${escapeHTML(object.name)}
-                </span>
-            </td>
+    const fragment = document.createDocumentFragment();
 
-            <td>${object.diameter_km} km</td>
+    for (const neo of state.filteredObjects) {
+        const row = document.createElement("tr");
 
-            <td>${object.relative_speed_kms} km/s</td>
+        if (state.selected?.id === neo.id) {
+            row.classList.add("selected-row");
+        }
 
-            <td>${object.closest_approach_km.toLocaleString()} km</td>
+        const objectCell = document.createElement("td");
+        const objectButton = document.createElement("button");
 
-            <td>
-                <span class="risk-pill risk-${object.risk_category}">
-                    ${object.risk_category}
-                </span>
-            </td>
+        objectButton.className = "object-button";
+        objectButton.type = "button";
+        objectButton.textContent = neo.name || "Unknown object";
 
-            <td>
-                <button
-                    class="view-button"
-                    data-object-id="${object.id}"
-                >
-                    Inspect
-                </button>
-            </td>
-        </tr>
-    `).join("");
-}
+        objectButton.addEventListener("click", () => {
+            selectAsteroid(neo);
+        });
 
-function escapeHTML(value) {
-    return String(value).replace(/[&<>"']/g, character => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;"
-    })[character]);
-}
+        objectCell.appendChild(objectButton);
+        row.appendChild(objectCell);
 
-document.getElementById("searchInput").addEventListener("input", filterObjects);
+        const diameter =
+            neo.diameter_km_min !== null &&
+            neo.diameter_km_max !== null
+                ? `${formatNumber(neo.diameter_km_min, 5)}–` +
+                  `${formatNumber(neo.diameter_km_max, 5)} km`
+                : "Not available";
 
-document.getElementById("riskFilter").addEventListener("change", filterObjects);
+        addCell(row, diameter);
 
-function filterObjects() {
-    const query = document.getElementById("searchInput")
-        .value.trim().toLowerCase();
+        const approach = neo.close_approach;
 
-    const category = document.getElementById("riskFilter").value;
+        addCell(
+            row,
+            approach ? formatDate(approach.date) : "Not available"
+        );
 
-    const filtered = objects.filter(object => {
-        const matchesName = object.name.toLowerCase().includes(query);
+        addCell(
+            row,
+            approach
+                ? `${formatNumber(approach.miss_distance_km)} km`
+                : "Not available"
+        );
 
-        const matchesRisk =
-            category === "all" || object.risk_category === category;
+        addCell(
+            row,
+            approach
+                ? `${formatNumber(approach.relative_velocity_km_s)} km/s`
+                : "Not available"
+        );
 
-        return matchesName && matchesRisk;
-    });
+        const classificationCell = document.createElement("td");
+        const badge = document.createElement("span");
 
-    renderTable(filtered);
-}
+        badge.className = neo.is_potentially_hazardous
+            ? "hazard-badge"
+            : "normal-badge";
 
-document.getElementById("asteroidTable").addEventListener("click", event => {
-    const button = event.target.closest("[data-object-id]");
+        badge.textContent = neo.is_potentially_hazardous
+            ? "Potentially hazardous"
+            : neo.is_potentially_hazardous === false
+                ? "Not flagged"
+                : "Unknown";
 
-    if (!button) return;
+        classificationCell.appendChild(badge);
+        row.appendChild(classificationCell);
 
-    const object = objects.find(
-        item => item.id === button.dataset.objectId
-    );
+        row.addEventListener("click", (event) => {
+            if (event.target.closest("button")) return;
+            selectAsteroid(neo);
+        });
 
-    if (object) {
-        updateSelectedObject(object);
-        focusAsteroid(object.id);
-    }
-});
-
-
-// ------------------------------
-// SELECTED OBJECT INFORMATION
-// ------------------------------
-
-function updateSelectedObject(object) {
-    if (!object) return;
-
-    selectedObjectId = object.id;
-
-    document.getElementById("selectedName").textContent = object.name;
-
-    document.getElementById("selectedDescription").textContent =
-        object.description;
-
-    document.getElementById("selectedDiameter").textContent =
-        `${object.diameter_km} km`;
-
-    document.getElementById("selectedSpeed").textContent =
-        `${object.relative_speed_kms} km/s`;
-
-    document.getElementById("selectedDistance").textContent =
-        `${object.closest_approach_km.toLocaleString()} km`;
-
-    const riskElement = document.getElementById("selectedRisk");
-
-    riskElement.textContent = object.risk_category;
-
-    riskElement.style.color = {
-        HIGH: "#ff6685",
-        MEDIUM: "#ffd166",
-        LOW: "#62f2bc"
-    }[object.risk_category];
-
-    document.getElementById("riskExplanation").textContent =
-        riskDescriptions[object.risk_category];
-
-    asteroidMeshes.forEach(mesh => {
-        const isSelected = mesh.userData.objectId === object.id;
-
-        mesh.scale.setScalar(isSelected ? 1.6 : 1);
-    });
-}
-
-
-// ------------------------------
-// THREE.JS INITIALISATION
-// ------------------------------
-
-function initialiseScene() {
-    if (renderer) {
-        cancelAnimationFrame(animationFrameId);
-        renderer.dispose();
-
-        canvasContainer.innerHTML = "";
-
-        asteroidMeshes = [];
-        orbitObjects = [];
+        fragment.appendChild(row);
     }
 
-    scene = new THREE.Scene();
+    body.appendChild(fragment);
+}
 
-    scene.background = new THREE.Color("#050713");
+function selectAsteroid(neo) {
+    state.selected = neo;
 
-    camera = new THREE.PerspectiveCamera(
-        45,
-        canvasContainer.clientWidth / canvasContainer.clientHeight,
-        0.1,
-        1000
+    setText("selectedName", neo.name || "Unknown object");
+    setText("selectedId", `NASA NEO ID: ${neo.id || "Not available"}`);
+
+    setText(
+        "selectedDiameter",
+        neo.diameter_km_min !== null &&
+        neo.diameter_km_max !== null
+            ? `${formatNumber(neo.diameter_km_min, 5)}–` +
+              `${formatNumber(neo.diameter_km_max, 5)} km`
+            : "Not available"
     );
 
-    camera.position.set(0, 6, 18);
+    const approach = neo.close_approach;
 
-    renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: false
+    setText(
+        "selectedVelocity",
+        approach
+            ? `${formatNumber(approach.relative_velocity_km_s)} km/s`
+            : "Not available"
+    );
+
+    setText(
+        "selectedDistance",
+        approach
+            ? `${formatNumber(approach.miss_distance_km)} km`
+            : "Not available"
+    );
+
+    setText(
+        "selectedDate",
+        approach ? formatDate(approach.date) : "Not available"
+    );
+
+    setText(
+        "selectedHazard",
+        neo.is_potentially_hazardous === true
+            ? "Yes — classified"
+            : neo.is_potentially_hazardous === false
+                ? "No — not flagged"
+                : "Unknown"
+    );
+
+    setText(
+        "selectedExplanation",
+        approach
+            ? (
+                `This NASA NeoWs record lists a close approach on ` +
+                `${formatDate(approach.date)}. Its miss distance is ` +
+                `${formatNumber(approach.miss_distance_km)} km and its ` +
+                `relative velocity is ` +
+                `${formatNumber(approach.relative_velocity_km_s)} km/s. ` +
+                `These values describe the recorded encounter; they do ` +
+                `not establish an impact probability.`
+            )
+            : (
+                "No close-approach measurement is available in this " +
+                "record. Missing measurements are not treated as zero."
+            )
+    );
+
+    $("focusObject").disabled = false;
+
+    renderTable();
+    focusAsteroid(neo);
+}
+
+function createChart(canvasId, type, labels, values, label) {
+    const canvas = $(canvasId);
+
+    if (!canvas || typeof Chart === "undefined") return null;
+
+    return new Chart(canvas, {
+        type,
+
+        data: {
+            labels,
+
+            datasets: [{
+                label,
+                data: values,
+                backgroundColor: [
+                    "rgba(167,139,250,.75)",
+                    "rgba(112,167,255,.75)",
+                    "rgba(101,230,240,.75)",
+                    "rgba(99,230,190,.75)",
+                    "rgba(255,190,120,.75)"
+                ],
+                borderColor: "#a78bfa",
+                borderWidth: 1,
+                borderRadius: 6
+            }]
+        },
+
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+
+            plugins: {
+                legend: {
+                    labels: {
+                        color: "#c3c9e0"
+                    }
+                }
+            },
+
+            scales: type === "bar" ? {
+                x: {
+                    ticks: { color: "#9ba5c2" },
+                    grid: { color: "rgba(180,193,255,.08)" }
+                },
+
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: "#9ba5c2",
+                        precision: 0
+                    },
+                    grid: { color: "rgba(180,193,255,.08)" }
+                }
+            } : {}
+        }
+    });
+}
+
+function updateCharts() {
+    if (state.diameterChart) {
+        state.diameterChart.destroy();
+        state.diameterChart = null;
+    }
+
+    if (state.velocityChart) {
+        state.velocityChart.destroy();
+        state.velocityChart = null;
+    }
+
+    const diameterBuckets = {
+        "< 0.01 km": 0,
+        "0.01–0.1 km": 0,
+        "0.1–1 km": 0,
+        "1–10 km": 0,
+        "≥ 10 km": 0
+    };
+
+    const velocityBuckets = {
+        "< 5 km/s": 0,
+        "5–10 km/s": 0,
+        "10–20 km/s": 0,
+        "20–30 km/s": 0,
+        "≥ 30 km/s": 0
+    };
+
+    for (const neo of state.filteredObjects) {
+        const diameter = getDiameter(neo);
+
+        if (diameter !== null && Number.isFinite(diameter)) {
+            if (diameter < 0.01) diameterBuckets["< 0.01 km"]++;
+            else if (diameter < 0.1) diameterBuckets["0.01–0.1 km"]++;
+            else if (diameter < 1) diameterBuckets["0.1–1 km"]++;
+            else if (diameter < 10) diameterBuckets["1–10 km"]++;
+            else diameterBuckets["≥ 10 km"]++;
+        }
+
+        const velocity = neo.close_approach?.relative_velocity_km_s;
+
+        if (velocity !== null && velocity !== undefined &&
+            Number.isFinite(Number(velocity))) {
+
+            const v = Number(velocity);
+
+            if (v < 5) velocityBuckets["< 5 km/s"]++;
+            else if (v < 10) velocityBuckets["5–10 km/s"]++;
+            else if (v < 20) velocityBuckets["10–20 km/s"]++;
+            else if (v < 30) velocityBuckets["20–30 km/s"]++;
+            else velocityBuckets["≥ 30 km/s"]++;
+        }
+    }
+
+    state.diameterChart = createChart(
+        "diameterChart",
+        "bar",
+        Object.keys(diameterBuckets),
+        Object.values(diameterBuckets),
+        "Objects"
+    );
+
+    state.velocityChart = createChart(
+        "velocityChart",
+        "bar",
+        Object.keys(velocityBuckets),
+        Object.values(velocityBuckets),
+        "Objects"
+    );
+}
+
+/* -------------------------------------------------------
+   THREE.JS ORBITAL VISUALIZATION
+------------------------------------------------------- */
+
+function createOrbit(radius, color, eccentricity = 0) {
+    const points = [];
+    const segments = 240;
+
+    for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+
+        const x = radius * Math.cos(angle);
+        const z = radius * Math.sqrt(
+            Math.max(0, 1 - eccentricity * eccentricity)
+        ) * Math.sin(angle);
+
+        points.push(new THREE.Vector3(x, 0, z));
+    }
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+    const material = new THREE.LineBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.48
     });
 
-    renderer.setPixelRatio(
-        Math.min(window.devicePixelRatio || 1, 2)
-    );
+    const line = new THREE.LineLoop(geometry, material);
 
-    renderer.setSize(
-        canvasContainer.clientWidth,
-        canvasContainer.clientHeight
-    );
+    state.scene.add(line);
 
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-    canvasContainer.appendChild(renderer.domElement);
-
-    earthGroup = new THREE.Group();
-
-    scene.add(earthGroup);
-
-    createLights();
-    createEarth();
-    createStars();
-    createAsteroids();
-
-    renderer.domElement.addEventListener("pointerdown", onScenePointerDown);
-
-    animate();
+    return line;
 }
 
-function createLights() {
-    const ambient = new THREE.AmbientLight(0x9aabff, 1.8);
-
-    scene.add(ambient);
-
-    const sunlight = new THREE.DirectionalLight(0xffffff, 3);
-
-    sunlight.position.set(8, 10, 8);
-
-    scene.add(sunlight);
-
-    const blueLight = new THREE.PointLight(0x3688ff, 15, 40);
-
-    blueLight.position.set(-7, 2, -5);
-
-    scene.add(blueLight);
-}
-
-function createEarth() {
-    const geometry = new THREE.SphereGeometry(2, 64, 64);
+function createSphere(radius, color, emissive = 0x000000) {
+    const geometry = new THREE.SphereGeometry(radius, 32, 24);
 
     const material = new THREE.MeshStandardMaterial({
-        color: 0x277bd1,
+        color,
+        emissive,
         roughness: 0.8,
         metalness: 0.05
     });
 
-    earth = new THREE.Mesh(geometry, material);
-
-    earthGroup.add(earth);
-
-    const atmosphere = new THREE.Mesh(
-        new THREE.SphereGeometry(2.1, 48, 48),
-        new THREE.MeshBasicMaterial({
-            color: 0x55bfff,
-            transparent: true,
-            opacity: 0.09,
-            side: THREE.BackSide
-        })
-    );
-
-    earthGroup.add(atmosphere);
-
-    // Simplified decorative continents.
-    // These shapes are visual placeholders, not geographic data.
-
-    const landMaterial = new THREE.MeshStandardMaterial({
-        color: 0x49d9b1,
-        roughness: 1
-    });
-
-    const landShapes = [
-        [0.4, 0.3, 0.7, 0.3],
-        [-0.7, 0.4, 0.4, 0.6],
-        [0.9, -0.5, 0.3, 0.4],
-        [-0.2, -0.8, 0.4, 0.3],
-        [1.5, 0.5, 0.25, 0.3]
-    ];
-
-    landShapes.forEach(([x, y, sx, sy]) => {
-        const shape = new THREE.Mesh(
-            new THREE.SphereGeometry(1, 16, 12),
-            landMaterial
-        );
-
-        shape.scale.set(sx, sy, 0.02);
-
-        shape.position.set(x, y, 1.85);
-
-        earth.add(shape);
-    });
+    return new THREE.Mesh(geometry, material);
 }
 
-function createStars() {
-    const count = 1800;
-
-    const positions = new Float32Array(count * 3);
-
-    for (let i = 0; i < count; i++) {
-        positions[i * 3] = (Math.random() - 0.5) * 100;
-        positions[i * 3 + 1] = (Math.random() - 0.5) * 100;
-        positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
-    }
-
-    const geometry = new THREE.BufferGeometry();
-
-    geometry.setAttribute(
-        "position",
-        new THREE.BufferAttribute(positions, 3)
-    );
-
-    const material = new THREE.PointsMaterial({
-        color: 0xffffff,
-        size: 0.055,
-        transparent: true,
-        opacity: 0.85
-    });
-
-    scene.add(new THREE.Points(geometry, material));
-}
-
-
-// ------------------------------
-// ORBITAL VISUALISATION
-// ------------------------------
-
-function createAsteroids() {
-    objects.forEach((object, index) => {
-        const orbitRadius = 3.2 + index * 0.48;
-
-        const orbit = new THREE.LineLoop(
-            createOrbitGeometry(orbitRadius, object.inclination_deg),
-            new THREE.LineBasicMaterial({
-                color: object.color,
-                transparent: true,
-                opacity: 0.3
-            })
-        );
-
-        earthGroup.add(orbit);
-
-        orbitObjects.push(orbit);
-
-        const geometry = new THREE.SphereGeometry(
-            0.09 + Math.min(object.diameter_km, 2) * 0.025,
-            16,
-            16
-        );
-
-        const material = new THREE.MeshStandardMaterial({
-            color: object.color,
-            emissive: object.color,
-            emissiveIntensity: 0.5,
-            roughness: 0.5
-        });
-
-        const asteroid = new THREE.Mesh(geometry, material);
-
-        asteroid.userData = {
-            objectId: object.id,
-            orbitRadius,
-            orbitSpeed: object.orbit_speed,
-            orbitAngle: object.orbit_phase,
-            inclination: THREE.MathUtils.degToRad(
-                object.inclination_deg
-            )
-        };
-
-        earthGroup.add(asteroid);
-
-        asteroidMeshes.push(asteroid);
-    });
-}
-
-function createOrbitGeometry(radius, inclinationDegrees) {
-    const points = [];
-
-    const inclination = THREE.MathUtils.degToRad(inclinationDegrees);
-
-    for (let i = 0; i < 160; i++) {
-        const angle = (i / 160) * Math.PI * 2;
-
-        points.push(
-            new THREE.Vector3(
-                Math.cos(angle) * radius,
-                Math.sin(angle) * Math.sin(inclination) * radius,
-                Math.sin(angle) * Math.cos(inclination) * radius
-            )
-        );
-    }
-
-    return new THREE.BufferGeometry().setFromPoints(points);
-}
-
-
-// ------------------------------
-// CAMERA INTERACTION
-// ------------------------------
-
-let dragging = false;
-let previousPointer = { x: 0, y: 0 };
-
-canvasContainer.addEventListener("pointerdown", event => {
-    dragging = true;
-
-    previousPointer = {
-        x: event.clientX,
-        y: event.clientY
-    };
-});
-
-window.addEventListener("pointerup", () => {
-    dragging = false;
-});
-
-window.addEventListener("pointermove", event => {
-    if (!dragging || !earthGroup) return;
-
-    const deltaX = event.clientX - previousPointer.x;
-    const deltaY = event.clientY - previousPointer.y;
-
-    earthGroup.rotation.y += deltaX * 0.005;
-    earthGroup.rotation.x += deltaY * 0.003;
-
-    earthGroup.rotation.x = THREE.MathUtils.clamp(
-        earthGroup.rotation.x,
-        -1.2,
-        1.2
-    );
-
-    previousPointer = {
-        x: event.clientX,
-        y: event.clientY
-    };
-});
-
-canvasContainer.addEventListener("wheel", event => {
-    if (!camera) return;
-
-    event.preventDefault();
-
-    camera.position.z += event.deltaY * 0.008;
-
-    camera.position.z = THREE.MathUtils.clamp(
-        camera.position.z,
-        7,
-        35
-    );
-}, { passive: false });
-
-function onScenePointerDown(event) {
-    const rect = renderer.domElement.getBoundingClientRect();
-
-    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-
-    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-    raycaster.setFromCamera(pointer, camera);
-
-    const hits = raycaster.intersectObjects(asteroidMeshes);
-
-    if (hits.length > 0) {
-        const id = hits[0].object.userData.objectId;
-
-        const object = objects.find(item => item.id === id);
-
-        updateSelectedObject(object);
-    }
-}
-
-function focusAsteroid(id) {
-    const asteroid = asteroidMeshes.find(
-        mesh => mesh.userData.objectId === id
-    );
-
-    if (!asteroid) return;
-
-    updateSelectedObject(
-        objects.find(object => object.id === id)
-    );
-}
-
-
-// ------------------------------
-// ANIMATION LOOP
-// ------------------------------
-
-function animate() {
-    animationFrameId = requestAnimationFrame(animate);
-
-    if (!rotationPaused && earthGroup) {
-        earthGroup.rotation.y += 0.0015;
-
-        asteroidMeshes.forEach(mesh => {
-            const data = mesh.userData;
-
-            data.orbitAngle += data.orbitSpeed * 0.002;
-
-            const angle = data.orbitAngle;
-
-            mesh.position.set(
-                Math.cos(angle) * data.orbitRadius,
-                Math.sin(angle) * data.orbitRadius *
-                    Math.sin(data.inclination),
-                Math.sin(angle) * data.orbitRadius *
-                    Math.cos(data.inclination)
-            );
-        });
-
-        if (earth) {
-            earth.rotation.y += 0.001;
-        }
-    }
-
-    renderer.render(scene, camera);
-}
-
-document.getElementById("resetView").addEventListener("click", () => {
-    if (!camera || !earthGroup) return;
-
-    camera.position.set(0, 6, 18);
-
-    earthGroup.rotation.set(0, 0, 0);
-});
-
-document.getElementById("toggleRotation").addEventListener("click", event => {
-    rotationPaused = !rotationPaused;
-
-    event.target.textContent = rotationPaused
-        ? "Resume Rotation"
-        : "Pause Rotation";
-});
-
-window.addEventListener("resize", () => {
-    if (!renderer || !camera) return;
-
-    const width = canvasContainer.clientWidth;
-    const height = canvasContainer.clientHeight;
-
-    camera.aspect = width / height;
-
-    camera.updateProjectionMatrix();
-
-    renderer.setSize(width, height);
-});
-
-
-// ------------------------------
-// HYPOTHETICAL RISK ANALYSIS
-// ------------------------------
-
-document.getElementById("riskForm").addEventListener("submit", async event => {
-    event.preventDefault();
-
-    const distance = Number(
-        document.getElementById("distanceInput").value
-    );
-
-    const speed = Number(
-        document.getElementById("speedInput").value
-    );
-
-    const indicator = document.getElementById("riskIndicator");
+function initThreeScene() {
+    const container = $("solarSystem");
 
     try {
-        const response = await fetch(`${API_BASE}/api/analyze`, {
-            method: "POST",
+        state.scene = new THREE.Scene();
+        state.scene.background = new THREE.Color("#080b19");
 
-            headers: {
-                "Content-Type": "application/json"
-            },
+        state.camera = new THREE.PerspectiveCamera(
+            45,
+            container.clientWidth / container.clientHeight,
+            0.1,
+            2000
+        );
 
-            body: JSON.stringify({
-                distance_km: distance,
-                relative_speed_kms: speed
-            })
+        state.camera.position.set(0, 48, 85);
+
+        state.renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: false
         });
 
-        const result = await response.json();
+        state.renderer.setPixelRatio(
+            Math.min(window.devicePixelRatio || 1, 2)
+        );
 
-        if (!response.ok) {
-            throw new Error(result.error || "Analysis failed.");
+        state.renderer.setSize(
+            container.clientWidth,
+            container.clientHeight
+        );
+
+        state.renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+        container.appendChild(state.renderer.domElement);
+
+        state.controls = new OrbitControls(
+            state.camera,
+            state.renderer.domElement
+        );
+
+        state.controls.enableDamping = true;
+        state.controls.dampingFactor = 0.06;
+        state.controls.minDistance = 15;
+        state.controls.maxDistance = 220;
+        state.controls.target.set(0, 0, 0);
+
+        state.scene.add(
+            new THREE.AmbientLight(0xffffff, 1.4)
+        );
+
+        const sunlight = new THREE.PointLight(
+            0xffd9a0,
+            150,
+            500
+        );
+
+        state.scene.add(sunlight);
+
+        const sun = createSphere(4.5, 0xffcb70, 0xff8c28);
+        sun.position.set(0, 0, 0);
+        state.scene.add(sun);
+
+        const sunGlow = new THREE.Mesh(
+            new THREE.SphereGeometry(5.7, 32, 32),
+            new THREE.MeshBasicMaterial({
+                color: 0xffa64d,
+                transparent: true,
+                opacity: 0.08,
+                side: THREE.BackSide
+            })
+        );
+
+        state.scene.add(sunGlow);
+
+        createOrbit(20, 0x70a7ff, 0.0167);
+        createOrbit(33, 0xa78bfa, 0.0934);
+        createOrbit(45, 0x65e6f0, 0.2056);
+
+        const earth = createSphere(1.8, 0x5799ff);
+        earth.position.set(20, 0, 0);
+        earth.name = "Earth";
+
+        state.scene.add(earth);
+
+        // Earth position and orbital path are illustrative, not ephemerides.
+
+        const starsGeometry = new THREE.BufferGeometry();
+        const starCount = 700;
+        const positions = [];
+
+        for (let i = 0; i < starCount; i++) {
+            positions.push(
+                (Math.random() - 0.5) * 400,
+                (Math.random() - 0.5) * 250,
+                (Math.random() - 0.5) * 400
+            );
         }
 
-        indicator.textContent = result.category;
+        starsGeometry.setAttribute(
+            "position",
+            new THREE.Float32BufferAttribute(positions, 3)
+        );
 
-        indicator.className = `risk-indicator ${result.category}`;
+        const stars = new THREE.Points(
+            starsGeometry,
+            new THREE.PointsMaterial({
+                color: 0xd8e4ff,
+                size: 0.35
+            })
+        );
 
-        document.getElementById("resultTitle").textContent =
-            result.title;
+        state.scene.add(stars);
 
-        document.getElementById("resultText").textContent =
-            result.explanation;
+        renderAsteroidMarkers();
+
+        $("viewerLoading").style.display = "none";
+
+        state.resizeObserver = new ResizeObserver(() => {
+            resizeThreeScene();
+        });
+
+        state.resizeObserver.observe(container);
+
+        const animate = () => {
+            requestAnimationFrame(animate);
+
+            sun.rotation.y += 0.001;
+            earth.rotation.y += 0.005;
+
+            if (state.controls) {
+                state.controls.update();
+            }
+
+            state.renderer.render(state.scene, state.camera);
+        };
+
+        animate();
 
     } catch (error) {
-        indicator.textContent = "ERROR";
+        console.error("Three.js initialization failed:", error);
 
-        indicator.className = "risk-indicator";
-
-        document.getElementById("resultTitle").textContent =
-            "Analysis unavailable";
-
-        document.getElementById("resultText").textContent =
-            error.message;
+        $("viewerLoading").textContent =
+            "3D visualization unavailable. Check browser WebGL support.";
     }
-});
+}
 
+function resizeThreeScene() {
+    if (!state.renderer || !state.camera) return;
 
-// ------------------------------
-// START APPLICATION
-// ------------------------------
+    const container = $("solarSystem");
 
-fetchObjects();
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+   if (width <= 0 || height <= 0) return;
+
+    state.camera.aspect = width / height;
+    state.camera.updateProjectionMatrix();
+
+    state.renderer.setSize(width, height);
+}
+
+function clearAsteroidMeshes() {
+    for (const mesh of state.asteroidMeshes.values()) {
+        state.scene.remove(mesh);
+
+        mesh.geometry.dispose();
+        mesh.material.dispose();
+    }
+
+    state.asteroidMeshes.clear();
+}
+
+function renderAsteroidMarkers() {
+    if (!state.scene) return;
+
+    clearAsteroidMeshes();
+
+    const objects = state.filteredObjects.slice(0, 150);
+
+    objects.forEach((neo, index) => {
+        const angle = index * 2.399963;
+        const radius = 28 + (index % 12) * 1.6;
+
+        const mesh = createSphere(
+            neo.is_potentially_hazardous ? 0.55 : 0.4,
+            neo.is_potentially_hazardous ? 0xff7f9d : 0x65e6f0
+        );
+
+        mesh.position.set(
+            Math.cos(angle) * radius,
+            Math.sin(index * 0.4) * 5,
+            Math.sin(angle) * radius
+        );
+
+        mesh.userData.neo = neo;
+
+        state.scene.add(mesh);
+        state.asteroidMeshes.set(neo.id, mesh);
+    });
+}
+
+function focusAsteroid(neo) {
+    if (!state.camera || !state.controls) return;
+
+    const mesh = state.asteroidMeshes.get(neo.id);
+
+    if (!mesh) return;
+
+    state.focusTarget = mesh.position.clone();
+
+    state.controls.target.copy(state.focusTarget);
+
+    const direction = new THREE.Vector3(1, 0.8, 1).normalize();
+
+    state.camera.position.copy(
+        mesh.position.clone().add(direction.multiplyScalar(15))
+    );
+
+    state.controls.update();
+}
+
+function resetCamera() {
+    if (!state.camera || !state.controls) return;
+
+    state.camera.position.set(0, 48, 85);
+    state.controls.target.set(0, 0, 0);
+
+    state.controls.update();
+
+    state.focusTarget = null;
+}
+
+function attachThreeInteractions() {
+    if (!state.renderer) return;
+
+    const canvas = state.renderer.domElement;
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+canvas.addEventListener("click", (event) => {
+        const rect = canvas.getBoundingClientRect();
+
+        pointer.x = (
+            (event.clientX - rect.left) / rect.width
+        ) * 2 - 1;
+
+        pointer.y = -(
+            (event.clientY - rect.top) / rect.height
+        ) * 2 + 1;
+
+        raycaster.setFromCamera(pointer, state.camera);
+
+        const meshes = [...state.asteroidMeshes.values()];
+        const intersections = raycaster.intersectObjects(meshes);
+
+        if (intersections.length > 0) {
+            const neo = intersections[0].object.userData.neo;
+
+            if (neo) {
+                selectAsteroid(neo);
+            }
+        }
+    });
+}
+
+function attachEvents() {
+    $("dateFilterForm").addEventListener("submit", (event) => {
+        event.preventDefault();
+        loadAsteroids();
+    });
+
+    $("searchInput").addEventListener("input", applyFilters);
+    $("hazardFilter").addEventListener("change", applyFilters);
+
+    $("resetCamera").addEventListener("click", resetCamera);
+
+    $("focusObject").addEventListener("click", () => {
+        if (state.selected) {
+            focusAsteroid(state.selected);
+        }
+    });
+}
+
+async function main() {
+    setInitialDates();
+
+    attachEvents();
+    initThreeScene();
+    attachThreeInteractions();
+
+    const online = await checkBackend();
+
+    if (online) {
+        await loadAsteroids();
+    }
+}
+
+main();
